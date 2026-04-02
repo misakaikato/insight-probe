@@ -1,0 +1,20 @@
+{
+  "name": "insight-probe-tools",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "kg": "tsx knowledge-graph.ts",
+    "kg:init": "tsx knowledge-graph.ts init",
+    "kg:new-topic": "tsx knowledge-graph.ts new-topic",
+    "kg:next": "tsx knowledge-graph.ts next",
+    "kg:stats": "tsx knowledge-graph.ts stats",
+    "kg:analyze": "tsx knowledge-graph.ts analyze",
+    "kg:mermaid": "tsx knowledge-graph.ts mermaid",
+    "kg:knowledge-list": "tsx knowledge-graph.ts knowledge-list",
+    "research": "tsx research-runner.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "tsx": "^4.7.0"
+  }
+}
