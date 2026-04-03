@@ -21,19 +21,16 @@
 
 ## 阶段 1: 数据采集
 
-运行 `bun run research-runner.ts run <topic_dir>` 或 `bun run research-runner.ts run <topic_dir> --analyze`
+运行 `bun run research-runner.ts run <topic_dir>`
 
 ```
 research-runner.ts:
 ├── 推导搜索方向（从图谱 deriveNextQueries）
 ├── 并发搜索（SearXNG + opencli 多站）
-├── URL 去重 + 质量评分
-├── 抓取页面（opencli web read / curl fallback）
-├── 生成 pages_manifest.json
-└── [--analyze] 自动分析页面并更新图谱
+├── URL 去重 + 质量评分（归一化 Wikipedia 多语言版本）
+├── 抓取页面（opencli web read）
+└── 生成 pages_manifest.json
 ```
-
-**`--analyze` 标志**：采集完成后自动分析前5页内容并更新图谱，无需手动运行 `kg analyze`
 
 **页面质量评分**（URL 选择依据）：
 
@@ -48,7 +45,60 @@ research-runner.ts:
 
 ## 阶段 2: 分析
 
+**由 Agent 使用自己的 LLM 进行分析**，不使用外部 API。
+
 读取 `pages_manifest.json` 中记录的页面文件，逐页分析：
+
+### Agent 分析步骤
+
+1. **运行 `bun run kg analyze <dir>`** 查看待分析页面列表
+2. **读取页面文件**（路径在 manifest 中）
+3. **使用 `references/prompts.md` 中的 prompt 框架**，调用自己的 LLM 分析页面内容
+4. **将 findings JSON 通过管道传给 `bun run kg:add-findings`** 添加到图谱
+
+### 添加 findings 命令
+
+```bash
+# 单条
+echo '{"label": "发现内容", "source_nodes": ["webpage_001"], "metadata": {"entities": ["实体"], "reliability": "high"}}' \
+  | bun run kg:add-findings <dir>
+
+# 多条
+cat findings.json | bun run kg:add-findings <dir>
+```
+
+### findings 格式
+
+```json
+{
+  "label": "发现内容的简洁描述（30-200字）",
+  "source_nodes": ["webpage_001", "webpage_002"],
+  "metadata": {
+    "entities": ["实体A", "实体B"],
+    "relations": [{"from": "A", "to": "B", "relation": "关系"}],
+    "reliability": "high|medium|low",
+    "round": 1
+  },
+  "relations": [
+    {"from": "实体A", "to": "实体B", "relation": "关系类型", "source": "来源描述"}
+  ]
+}
+```
+
+### 添加问题（followup_questions）
+
+如果分析产生新问题，需要直接编辑 `knowledge_graph.json` 添加 question 节点，或在 findings 的 metadata 中包含待添加的问题。
+
+格式：
+```json
+{
+  "id": "question_XXX",
+  "type": "question",
+  "label": "问题内容",
+  "status": "unanswered",
+  "timestamp": "ISO时间戳"
+}
+```
 
 ### Step 1: 推导搜索方向
 
@@ -71,34 +121,12 @@ research-runner.ts:
 ### Step 2: 搜索执行
 
 ```bash
-# === SearXNG 多语言搜索 ===
-curl -s "http://127.0.0.1:10086/search?q={q}&format=json&engines=google,bing,wikipedia,wikidata,duckduckgo,yandex&categories=general,news,science,web" \
-  -o "{topic_dir}/search_results/r{n}_q{m}_searxng.json"
-
-# === opencli 中文站点（并行）===
-opencli wikipedia search "{q}" --lang zh --limit 8 -f json
-opencli zhihu search "{q}" --limit 8 -f json
-opencli weibo search "{q}" --limit 8 -f json
-opencli bilibili search "{q}" --limit 8 -f json
-opencli xiaohongshu search "{q}" --limit 8 -f json
-opencli douban search "{q}" --type movie --limit 5 -f json
-opencli douban search "{q}" --type book --limit 5 -f json
-
-# === opencli 英文站点（并行）===
-opencli wikipedia search "{q_en}" --lang en --limit 8 -f json
-opencli hackernews search "{q_en}" --limit 8 -f json
-opencli reddit search "{q_en}" --limit 8 -f json
-opencli arxiv search "{q_en}" --limit 8 -f json
-opencli stackoverflow search "{q_en}" --limit 8 -f json
-opencli v2ex hot -f json  # V2EX 热门话题
+# === opencli web search（统一搜索所有适配器）===
+opencli web search "{q}" --limit 8 -f json -o "{topic_dir}/search_results/r{n}_q{m}_opencli.json"
+opencli web search "{q_en}" --limit 8 -f json -o "{topic_dir}/search_results/r{n}_q{m}_opencli_en.json"
 ```
 
-**搜索站点映射**：
-
-| 语言 | 站点 |
-|------|------|
-| 中文 (zh) | wikipedia (zh), 知乎, 微博, B站, 小红书, 豆瓣 |
-| 英文 (en) | wikipedia (en), Hacker News, Reddit, arXiv, StackOverflow, V2EX hot |
+> `opencli web search` 会自动使用 opencli 中所有带 search 的适配器进行搜索，`--limit` 限制每种适配器的最多结果数。
 
 **多语言查询生成示例**：
 
@@ -116,27 +144,16 @@ opencli v2ex hot -f json  # V2EX 热门话题
 
 ### Step 4: 抓取页面
 
-**优先使用 `opencli web read`**（支持 JS 渲染、内容提取、去噪）：
+**统一使用 `opencli web read`**（支持 JS 渲染、内容提取、去噪）：
 
 ```bash
-# 标准方式：opencli web read
+# 所有页面统一使用 opencli web read（包括 SearXNG 返回的结果和其他任意 URL）
 opencli web read --url "{url}" --output "{topic_dir}/pages" -f json
 
 # 输出文件：{topic_dir}/pages/{标题}/{标题}.md
 ```
 
-**内容质量检查**：
-- 抓取后检查文件大小，< 500 字节视为失败
-- 失败时 fallback 到 curl：
-  ```bash
-  curl -sL -A "InsightProbe/1.0" -m 30 "{url}" > "{topic_dir}/pages/{filename}.txt"
-  ```
-
-| 站点类型 | 优先方式 | 说明 |
-|----------|----------|------|
-| 任意页面 | `opencli web read` | 支持 JS 渲染，输出干净 Markdown |
-| opencli 有专用命令 | `opencli <site> <cmd> <id>` | 如知乎、微信公众号等 |
-| opencli web read 失败 | `curl` | 最后 fallback |
+**注意**：不使用 curl 抓取页面，所有页面统一通过 `opencli web read` 读取。
 
 ### Step 5: 分析页面内容
 

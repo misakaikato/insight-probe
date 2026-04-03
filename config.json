@@ -1,6 +1,6 @@
 {
   "name": "insight-probe",
-  "version": "2.2.0",
+  "version": "2.4.0",
   "description": "迭代式深度调研助手配置",
 
   "tools": {
@@ -21,79 +21,79 @@
         {
           "name": "wikipedia",
           "label": "维基百科",
-          "command": "opencli wikipedia search \"{query}\" --lang zh --limit 5 -f json",
+          "command": "opencli wikipedia search \"{query}\" --lang zh --limit 30 -f json",
           "lang": "zh"
         },
         {
           "name": "wikipedia_en",
           "label": "Wikipedia",
-          "command": "opencli wikipedia search \"{query}\" --lang en --limit 5 -f json",
+          "command": "opencli wikipedia search \"{query}\" --lang en --limit 30 -f json",
           "lang": "en"
         },
         {
           "name": "zhihu",
           "label": "知乎",
-          "command": "opencli zhihu search \"{query}\" --limit 5 -f json",
+          "command": "opencli zhihu search \"{query}\" --limit 30 -f json",
           "lang": "zh",
           "browser": true
         },
         {
           "name": "xiaohongshu",
           "label": "小红书",
-          "command": "opencli xiaohongshu search \"{query}\" --limit 5 -f json",
+          "command": "opencli xiaohongshu search \"{query}\" --limit 30 -f json",
           "lang": "zh",
           "browser": true
         },
         {
           "name": "bilibili",
           "label": "B站",
-          "command": "opencli bilibili search \"{query}\" --limit 5 -f json",
+          "command": "opencli bilibili search \"{query}\" --limit 30 -f json",
           "lang": "zh",
           "browser": true
         },
         {
           "name": "weibo",
           "label": "微博",
-          "command": "opencli weibo search \"{query}\" --limit 5 -f json",
+          "command": "opencli weibo search \"{query}\" --limit 30 -f json",
           "lang": "zh",
           "browser": true
         },
         {
           "name": "douban_movie",
           "label": "豆瓣电影",
-          "command": "opencli douban search \"{query}\" --type movie --limit 5 -f json",
+          "command": "opencli douban search \"{query}\" --type movie --limit 30 -f json",
           "lang": "zh",
           "browser": true
         },
         {
           "name": "douban_book",
           "label": "豆瓣图书",
-          "command": "opencli douban search \"{query}\" --type book --limit 5 -f json",
+          "command": "opencli douban search \"{query}\" --type book --limit 30 -f json",
           "lang": "zh",
           "browser": true
         },
         {
           "name": "hackernews",
           "label": "HackerNews",
-          "command": "opencli hackernews search \"{query}\" --limit 5 -f json",
+          "command": "opencli hackernews search \"{query}\" --limit 30 -f json",
           "lang": "en"
         },
         {
           "name": "reddit",
           "label": "Reddit",
-          "command": "opencli reddit search \"{query}\" --limit 5 -f json",
+          "command": "opencli reddit search \"{query}\" --limit 30 -f json",
           "lang": "en"
         },
         {
           "name": "stackoverflow",
           "label": "StackOverflow",
-          "command": "opencli stackoverflow search \"{query}\" --limit 5 -f json",
+          "command": "opencli stackoverflow search \"{query}\" --limit 30 -f json",
           "lang": "en"
         },
         {
           "name": "arxiv",
           "label": "ArXiv",
-          "command": "opencli arxiv search \"{query}\" --limit 5 -f json",
+          "command": "opencli arxiv search \"{query}\" --limit 30 -f json",
           "lang": "en"
         },
         {
@@ -106,7 +106,7 @@
         {
           "name": "xueqiu",
           "label": "雪球",
-          "command": "opencli xueqiu search \"{query}\" --limit 5 -f json",
+          "command": "opencli xueqiu search \"{query}\" --limit 30 -f json",
           "lang": "zh",
           "browser": true,
           "note": "仅搜索股票代码或名称，不适用于通用调研"

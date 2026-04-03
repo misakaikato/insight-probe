@@ -96,149 +96,31 @@ export interface DynamicRelation {
   source?: string;   // 来源描述
 }
 
-// ============ 页面分析结果类型 ============
+// ============ 页面内容准备（供 Agent 分析）============
 
-export interface PageAnalysis {
-  findings: Array<{ fact: string; category: string; significance: string }>;
-  entities: TypedEntity[];
-  relations: DynamicRelation[];
-  followupQuestions: string[];
+export interface PreparedPage {
+  content: string;
+  title: string;
+  url: string;
 }
 
 /**
- * 简单的页面内容分析函数
- * 使用规则匹配提取关键信息，无需 LLM API
+ * 页面内容读取与准备函数
+ * 仅读取页面原始内容，由 Agent（使用 prompts.md 中的分析框架）完成分析
  *
  * @param content 页面文本内容
  * @param title 页面标题
  * @param url 页面 URL
- * @returns 分析结果
+ * @returns 包含原始内容的结构，供 Agent 分析使用
  */
-export function analyzePageContent(content: string, title: string, url: string): PageAnalysis {
-  const findings: Array<{ fact: string; category: string; significance: string }> = [];
-  const entities: TypedEntity[] = [];
-  const relations: DynamicRelation[] = [];
-  const followupQuestions: string[] = [];
+export interface PreparedPage {
+  content: string;
+  title: string;
+  url: string;
+}
 
-  // 解码 URL 编码的字符串
-  const decodeUrlString = (str: string): string => {
-    try {
-      return decodeURIComponent(str);
-    } catch {
-      return str;
-    }
-  };
-
-  // 从 URL 中提取更干净的标题
-  const cleanTitle = (urlStr: string): string => {
-    const decoded = decodeUrlString(urlStr);
-    // 获取路径最后部分并移除文件扩展名
-    const parts = decoded.split('/');
-    const lastPart = parts[parts.length - 1] || decoded;
-    // 移除 .md 等扩展名
-    return lastPart.replace(/\.(md|txt|html)$/i, '').replace(/_/g, ' ');
-  };
-
-  const pageTitle = cleanTitle(url) || title;
-
-  // 清理内容：移除 markdown 图片链接、HTML 标签等
-  const cleanContent = content
-    .replace(/!\[.*?\]\(.*?\)/g, '')
-    .replace(/\[.*?\]\(.*?\)/g, (match) => match.replace(/\[|\]/g, '').split('(')[1]?.replace(')', '') || '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/^#+\s+/gm, '')
-    .replace(/\*\*|__/g, '')
-    .replace(/\*|_/g, '')
-    .replace(/`{1,3}/g, '')
-    .replace(/^\s*[-*+]\s+/gm, '')
-    .replace(/^\s*\d+\.\s+/gm, '')
-    .replace(/^\s*[|].*[|]\s*$/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-  const sentences = cleanContent.split(/[。！？\n]/).filter(s => s.trim().length > 20);
-
-  // 实体类型关键词
-  const entityPatterns: Array<{ type: TypedEntity['type']; keywords: string[] }> = [
-    { type: '人物', keywords: ['生', '卒', '著', '发明', '发现', '创立', '提出', '认为', '学家', '师', '徒', '皇帝', '王', '总统', '总理', '教授', '博士', '术士', '家'] },
-    { type: '组织', keywords: ['派', '教', '党', '会', '社', '学派', '门', '宗', '道'] },
-    { type: '地点', keywords: ['位于', '在', '建于', '出土于', '发现于', '国', '城', '地区', '洲'] },
-    { type: '概念', keywords: ['理论', '学说', '方法', '术', '法', '主义', '思想', '哲学', '体系'] },
-    { type: '事件', keywords: ['年', '世纪', '时期', '时代', '发生', '战争', '革命', '运动'] },
-  ];
-
-  // 从句子中提取实体
-  const foundEntities = new Set<string>();
-  for (const sentence of sentences.slice(0, 30)) {
-    for (const pattern of entityPatterns) {
-      for (const keyword of pattern.keywords) {
-        if (sentence.includes(keyword) && sentence.length < 200) {
-          // 尝试提取实体名称（取句子开头的名词短语）
-          const match = sentence.match(/^([^，。,、：:]+)/);
-          if (match && match[1] && match[1].length > 1 && match[1].length < 20) {
-            const entityName = match[1].trim();
-            if (!foundEntities.has(entityName)) {
-              foundEntities.add(entityName);
-              entities.push({ name: entityName, type: pattern.type });
-            }
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  // 提取关键发现：从第一段和包含关键信息的句子中
-  const keyPatterns = [
-    /是.+的(.+)/,
-    /称为(.+)/,
-    /包括.+和(.+)/,
-    /起源[于在](.+)/,
-    /主要[目标内容]为(.+)/,
-    /由(.+)构成/,
-    /(.+)的理论/,
-    /(.+)认为/,
-  ];
-
-  for (const sentence of sentences.slice(0, 50)) {
-    for (const pattern of keyPatterns) {
-      const match = sentence.match(pattern);
-      if (match && match[1] && match[1].length > 5 && match[1].length < 100) {
-        const fact = sentence.trim();
-        if (fact.length > 15 && fact.length < 200) {
-          findings.push({
-            fact,
-            category: '概念',
-            significance: fact.substring(0, 30) + '...'
-          });
-          break;
-        }
-      }
-    }
-  }
-
-  // 去重 findings
-  const uniqueFindings = findings.filter((f, i, arr) =>
-    arr.findIndex(x => x.fact.substring(0, 50) === f.fact.substring(0, 50)) === i
-  );
-
-  // 生成后续问题
-  if (entities.length > 0) {
-    const lastEntity = entities[entities.length - 1];
-    followupQuestions.push(`${lastEntity.name}的详细信息是什么？`);
-  }
-
-  if (uniqueFindings.length > 3) {
-    followupQuestions.push(`${pageTitle}的历史影响有哪些？`);
-    followupQuestions.push(`${pageTitle}在现代有什么应用？`);
-  }
-
-  return {
-    findings: uniqueFindings.slice(0, 5),
-    entities: entities.slice(0, 10),
-    relations,
-    followupQuestions: followupQuestions.slice(0, 3)
-  };
+export function analyzePageContent(content: string, title: string, url: string): PreparedPage {
+  return { content, title, url };
 }
 
 /**
@@ -321,11 +203,25 @@ export class KnowledgeGraphManager {
   }
 
   private rebuildCounters(): void {
+    // 重置计数器
+    this.nodeCounter = {
+      topic: 0,
+      search_query: 0,
+      webpage: 0,
+      finding: 0,
+      question: 0,
+    };
+
     for (const node of this.kg.nodes) {
-      const type = node.type;
-      const num = parseInt(node.id.split('_').pop() || '0', 10);
-      if (num > this.nodeCounter[type]) {
-        this.nodeCounter[type] = num;
+      // 从 ID 中提取数字部分
+      // 支持格式: type_N, type_NN, type_NNN
+      const match = node.id.match(/^([a-z_]+)_(\d+)$/);
+      if (match) {
+        const idType = match[1] as NodeType;
+        const num = parseInt(match[2], 10);
+        if (idType in this.nodeCounter && !isNaN(num) && num > 0) {
+          this.nodeCounter[idType] = Math.max(this.nodeCounter[idType], num);
+        }
       }
     }
   }
@@ -652,19 +548,19 @@ export class KnowledgeGraphManager {
   }
 
   /**
-   * 核心方法：从图谱状态推导下一步搜索方向
+   * 核心方法：从图谱状态推导下一步搜索方向（AI 驱动）
    *
    * 优先级：
    * 1. 未回答的 question 节点（直接转为搜索查询）
-   * 2. finding 中提到但尚未深挖的实体/概念（多个查询模板）
+   * 2. AI 分析图谱状态，从 findings/entities 中推导搜索方向
    * 3. 返回空数组表示图谱已收敛
    */
-  deriveNextQueries(maxQueries: number = 4, round?: number): Array<{
+  async deriveNextQueries(maxQueries: number = 4, round?: number): Promise<Array<{
     query: string;
     reason: string;
     sourceNodeId: string;
     sourceType: 'question' | 'finding';
-  }> {
+  }>> {
     const queries: Array<{
       query: string;
       reason: string;
@@ -679,15 +575,7 @@ export class KnowledgeGraphManager {
         .flatMap(n => [n.label, n.query].filter(Boolean))
     );
 
-    // 如果指定了 round，过滤该 round 之前的 finding（避免重复挖掘旧发现）
-    const relevantFindings = round !== undefined
-      ? this.getFindings().filter(f => {
-          const fRound = f.metadata?.round as number | undefined;
-          return fRound === undefined || fRound >= round - 1;
-        })
-      : this.getFindings();
-
-    // 优先级 1：未回答的 question
+    // 优先级 1：未回答的 question（纯逻辑，不需要 AI）
     const unanswered = this.getUnansweredQuestions();
     for (const q of unanswered) {
       const queryText = q.label;
@@ -702,87 +590,35 @@ export class KnowledgeGraphManager {
       if (queries.length >= maxQueries) return queries;
     }
 
-    // 优先级 2：从 finding 中提取可深挖实体
-    // 按实体类型使用不同的查询模板，实现更精准的扩展
-    const entityTemplates: Record<string, string[]> = {
-      '人物': [
-        '{e} 生平简介',
-        '{e} 代表作品/成就',
-        '{e} 历史地位与影响',
-        '{e} 名言语录',
-      ],
-      '组织': [
-        '{e} 组织历史沿革',
-        '{e} 核心成员/创始人',
-        '{e} 重要事件/里程碑',
-        '{e} 组织结构与现状',
-      ],
-      '概念': [
-        '{e} 理论背景与来源',
-        '{e} 核心内容与定义',
-        '{e} 批判性评价',
-        '{e} 现代应用与影响',
-      ],
-      '地点': [
-        '{e} 历史沿革',
-        '{e} 文化特色',
-        '{e} 重要事件/名人',
-        '{e} 现代发展与现状',
-      ],
-      '事件': [
-        '{e} 发生背景',
-        '{e} 主要经过',
-        '{e} 各方反应',
-        '{e} 历史影响与意义',
-      ],
-      // 默认模板（用于类型未知或兼容性）
-      'default': [
-        '{e} 是什么',
-        '{e} 详细介绍',
-        '{e} 起源 历史',
-        '{e} 最新进展',
-      ],
-    };
+    // 优先级 2：基于已有 findings 的实体推导搜索方向（本地逻辑，无需 API）
+    // 如果指定了 round，过滤该 round 之前的 finding
+    const relevantFindings = round !== undefined
+      ? this.getFindings().filter(f => {
+          const fRound = f.metadata?.round as number | undefined;
+          return fRound === undefined || fRound >= round - 1;
+        })
+      : this.getFindings();
 
-    // 辅助函数：标准化实体（兼容 string 和 TypedEntity 格式）
-    const normalizeEntity = (entity: any): TypedEntity => {
-      if (typeof entity === 'string') {
-        return { name: entity, type: '概念' }; // 默认类型
-      }
-      return entity as TypedEntity;
-    };
-
-    // 辅助函数：获取实体的模板
-    const getTemplatesForEntity = (entity: TypedEntity): string[] => {
-      return entityTemplates[entity.type] || entityTemplates['default'];
-    };
-
-    // 辅助函数：生成查询文本
-    const generateQueries = (entity: TypedEntity): string[] => {
-      const templates = getTemplatesForEntity(entity);
-      return templates.map(tpl => tpl.replace('{e}', entity.name));
-    };
-
-    for (const f of relevantFindings) {
-      const entities = f.metadata?.entities as any[] | undefined;
-      if (!entities) continue;
-
-      for (const entity of entities) {
-        const normalized = normalizeEntity(entity);
-        const queryTexts = generateQueries(normalized);
-        // 尝试多个模板，第一个未被搜索过的即使用
-        for (const queryText of queryTexts) {
-          if (!existingQueryTexts.has(queryText)) {
-            queries.push({
-              query: queryText,
-              reason: `从发现"${f.label}"中提取的${normalized.type}实体: ${normalized.name}`,
-              sourceNodeId: f.id,
-              sourceType: 'finding',
-            });
-            break; // 找到第一个可用模板就跳出
-          }
+    if (relevantFindings.length > 0) {
+      const allEntities = new Set<string>();
+      for (const f of relevantFindings) {
+        const entities = (f.metadata?.entities as string[] || []);
+        for (const e of entities) {
+          if (typeof e === 'string') allEntities.add(e);
         }
-        if (queries.length >= maxQueries) return queries;
+      }
+
+      for (const entity of allEntities) {
+        if (queries.length >= maxQueries) break;
+        const entityQuery = `${entity}`;
+        if (!existingQueryTexts.has(entityQuery)) {
+          queries.push({
+            query: entityQuery,
+            reason: `来自已有发现的实体: ${entity}`,
+            sourceNodeId: relevantFindings[0]?.id || 'topic_root',
+            sourceType: 'finding' as const,
+          });
+        }
       }
     }
 
@@ -792,8 +628,8 @@ export class KnowledgeGraphManager {
   /**
    * 检查图谱是否收敛（没有新的搜索方向）
    */
-  isConverged(): boolean {
-    const nextQueries = this.deriveNextQueries(1);
+  async isConverged(): Promise<boolean> {
+    const nextQueries = await this.deriveNextQueries(1);
     return nextQueries.length === 0;
   }
 
@@ -1386,6 +1222,13 @@ export class KnowledgeGraphManager {
       if (f.metadata?.significance) {
         lines.push(`**重要性**: ${f.metadata.significance}`);
       }
+      // 事实引用来源
+      const sourceUrl = f.metadata?.sourceUrl as string | undefined;
+      if (sourceUrl) {
+        const webpageNode = this.kg.nodes.find(n => n.type === 'webpage' && n.url === sourceUrl);
+        const sourceLabel = webpageNode?.label || sourceUrl;
+        lines.push(`**来源**: [${sourceLabel}](${sourceUrl})`);
+      }
       if (f.source_nodes && f.source_nodes.length > 0) {
         const sources = f.source_nodes
           .map(id => this.kg.nodes.find(n => n.id === id))
@@ -1483,6 +1326,13 @@ export class KnowledgeGraphManager {
           lines.push(`1. **${f.label}**${versionNote}`);
           if (f.metadata?.significance) {
             lines.push(`   - ${f.metadata.significance}`);
+          }
+          // 事实引用
+          const sourceUrl = f.metadata?.sourceUrl as string | undefined;
+          if (sourceUrl) {
+            const webpageNode = this.kg.nodes.find(n => n.type === 'webpage' && n.url === sourceUrl);
+            const sourceLabel = webpageNode?.label || sourceUrl;
+            lines.push(`   > 来源: [${sourceLabel}](${sourceUrl})`);
           }
         }
         lines.push('');
@@ -1653,7 +1503,7 @@ export class KnowledgeGraphManager {
 
 // ============ CLI 入口 ============
 
-export function main(): void {
+export async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
 
@@ -1765,7 +1615,7 @@ export function main(): void {
     }
     const kgm = new KnowledgeGraphManager('', baseDir);
     kgm.load();
-    const queries = kgm.deriveNextQueries(6);
+    const queries = await kgm.deriveNextQueries(6);
     if (queries.length === 0) {
       console.log('\n[KG] Converged - no more search directions needed');
     } else {
@@ -1791,16 +1641,14 @@ export function main(): void {
     console.log(`     Deleted: ${result.deleted} expired files`);
     console.log(`     Kept: ${result.updated} files`);
   } else if (command === 'analyze') {
+    // 准备页面内容供 Agent 分析（Agent 自己读取并分析页面）
     const baseDir = args[1];
     if (!baseDir) {
-      console.error('Usage: kg analyze <baseDir> [--pages] [--max <n>]');
+      console.error('Usage: kg analyze <baseDir> [--max <n>]');
       process.exit(1);
     }
     const resolvedBaseDir = path.resolve(baseDir);
     const maxPages = parseInt(args.find((a, i) => args[i - 1] === '--max') || '10', 10);
-    const analyzeAll = args.includes('--pages');
-
-    console.log(`\n[KG] Starting page analysis...`);
 
     // 读取 pages_manifest.json
     const manifestPath = path.join(resolvedBaseDir, 'pages_manifest.json');
@@ -1821,84 +1669,57 @@ export function main(): void {
     );
 
     // 过滤需要分析的页面
-    let pagesToAnalyze = manifest.pages.filter((p: any) => !analyzedUrls.has(p.url));
-
-    if (analyzeAll) {
-      pagesToAnalyze = manifest.pages;
-    }
+    const pagesToAnalyze = manifest.pages.filter((p: any) => !analyzedUrls.has(p.url));
 
     if (pagesToAnalyze.length === 0) {
       console.log('[KG] No new pages to analyze.');
     } else {
-      console.log(`[KG] Found ${pagesToAnalyze.length} pages to analyze (max: ${maxPages})`);
-    }
-
-    let analyzedCount = 0;
-    const findingsAdded: string[] = [];
-    const questionsAdded: string[] = [];
-
-    for (let i = 0; i < Math.min(pagesToAnalyze.length, maxPages); i++) {
-      const page = pagesToAnalyze[i];
-      console.log(`\n[KG] Analyzing (${i + 1}/${Math.min(pagesToAnalyze.length, maxPages)}): ${page.url.substring(0, 60)}...`);
-
-      try {
-        // 读取页面内容
-        const contentPath = page.file;
-        if (!fs.existsSync(contentPath)) {
-          console.log(`  [SKIP] File not found: ${contentPath}`);
-          continue;
-        }
-
-        const content = fs.readFileSync(contentPath, 'utf-8');
-        const pageTitle = page.url.split('/').pop() || page.url;
-
-        // 使用分析函数提取发现
-        const analysis = analyzePageContent(content, pageTitle, page.url);
-
-        // 添加发现
-        for (const finding of analysis.findings) {
-          const findingNode = kgm.addFindingNode(finding.fact, [], {
-            metadata: {
-              entities: analysis.entities,
-              relations: analysis.relations,
-              sourceUrl: page.url,
-              round: 1,
-            }
-          });
-          findingsAdded.push(findingNode.id);
-        }
-
-        // 添加后续问题
-        for (const q of analysis.followupQuestions) {
-          const questionNode = kgm.addQuestionNode(q);
-          questionsAdded.push(questionNode.id);
-        }
-
-        // 标记页面为已分析（通过更新 key_findings）
-        const webpageNode = kgm.kg.nodes.find(n => n.type === 'webpage' && n.url === page.url);
-        if (webpageNode) {
-          webpageNode.key_findings = analysis.findings.map(f => f.fact.substring(0, 50));
-        }
-
-        analyzedCount++;
-        kgm.save();
-
-        console.log(`  [OK] Added ${analysis.findings.length} findings, ${analysis.followupQuestions.length} questions`);
-
-      } catch (err) {
-        console.log(`  [ERROR] ${err}`);
+      console.log(`[KG] ${pagesToAnalyze.length} pages ready for Agent analysis (showing first ${maxPages}):\n`);
+      for (let i = 0; i < Math.min(pagesToAnalyze.length, maxPages); i++) {
+        const page = pagesToAnalyze[i];
+        console.log(`  ${i + 1}. ${page.url}`);
+        console.log(`     File: ${page.file}`);
+        console.log(`     Score: ${page.score?.toFixed(2) || 'N/A'}`);
+        console.log('');
       }
+      console.log('[KG] Agent should:');
+      console.log('   1. Read each page file');
+      console.log('   2. Use the analysis prompt (see references/prompts.md) to extract findings');
+      console.log('   3. Run: bun run kg add-findings <baseDir> to update the graph');
     }
 
-    console.log(`\n[KG] Analysis complete`);
-    console.log(`     Pages analyzed: ${analyzedCount}`);
-    console.log(`     Findings added: ${findingsAdded.length}`);
-    console.log(`     Questions added: ${questionsAdded.length}`);
-
-    if (findingsAdded.length > 0 || questionsAdded.length > 0) {
-      console.log(`\n[KG] Run 'kg stats ${resolvedBaseDir}' to see updated graph.`);
+  } else if (command === 'add-findings') {
+    // 从标准输入读取 findings JSON 并添加到图谱
+    const baseDir = args[1];
+    if (!baseDir) {
+      console.error('Usage: kg add-findings <baseDir>');
+      process.exit(1);
     }
+    const resolvedBaseDir = path.resolve(baseDir);
+    const kgm = new KnowledgeGraphManager('', resolvedBaseDir);
+    kgm.load();
 
+    let input = '';
+    process.stdin.on('data', chunk => input += chunk);
+    process.stdin.on('end', () => {
+      try {
+        const findings = JSON.parse(input);
+        const added = Array.isArray(findings) ? findings : [findings];
+        for (const f of added) {
+          if (f.label && f.source_nodes) {
+            kgm.addFindingNode(f.label, f.source_nodes, {
+              metadata: f.metadata,
+              relations: f.relations,
+            });
+          }
+        }
+        kgm.save();
+        console.log(`[KG] Added ${added.length} findings to graph`);
+      } catch (e) {
+        console.error('[KG] Error parsing findings JSON:', e);
+        process.exit(1);
+      }
+    });
   } else if (command === 'new-topic') {
     const topic = args[1];
     if (!topic) {
@@ -1945,5 +1766,5 @@ export function main(): void {
 
 // 如果直接运行（非 import）
 if (process.argv[1]?.endsWith('knowledge-graph.ts')) {
-  main();
+  main().catch(console.error);
 }

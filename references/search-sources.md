@@ -1,5 +1,45 @@
 # 搜索来源参考
 
+## 搜索优先级
+
+**opencli search 站点优先，SearXNG 作为补充聚合来源。**
+
+每次搜索必须并发执行所有可用来源，按以下优先级：
+
+1. **opencli search 站点**（每个站点的 `search` 命令）
+2. **SearXNG**（聚合 google/bing/wikipedia 等引擎）
+
+## opencli 有 search 能力的站点（搜索必用）
+
+### 中文
+
+| 站点 | 命令 | 说明 |
+|------|------|------|
+| 维基百科 zh | `opencli wikipedia search "{q}" --lang zh --limit 5 -f json` | 百科 |
+| 知乎 | `opencli zhihu search "{q}" --limit 5 -f json` | 问答社区 |
+| 小红书 | `opencli xiaohongshu search "{q}" --limit 5 -f json` | 生活分享 |
+| B站 | `opencli bilibili search "{q}" --limit 5 -f json` | 视频内容 |
+| 微博 | `opencli weibo search "{q}" --limit 5 -f json` | 社交媒体 |
+| 豆瓣电影 | `opencli douban search "{q}" --type movie --limit 5 -f json` | 影视评分 |
+| 豆瓣图书 | `opencli douban search "{q}" --type book --limit 5 -f json` | 书籍评分 |
+
+### 英文
+
+| 站点 | 命令 | 说明 |
+|------|------|------|
+| Wikipedia en | `opencli wikipedia search "{q}" --lang en --limit 5 -f json` | 百科 |
+| HackerNews | `opencli hackernews search "{q}" --limit 5 -f json` | 技术资讯 |
+| Reddit | `opencli reddit search "{q}" --limit 5 -f json` | 社区讨论 |
+| StackOverflow | `opencli stackoverflow search "{q}" --limit 5 -f json` | 技术问答 |
+| ArXiv | `opencli arxiv search "{q}" --limit 5 -f json` | 学术论文 |
+
+### 特殊（不可用于常规搜索）
+
+| 站点 | 命令 | 限制 |
+|------|------|------|
+| V2EX | `opencli v2ex hot -f json` | **无 search 命令**，只能获取热门 |
+| 雪球 | `opencli xueqiu search "{q}" --limit 5 -f json` | **仅搜股票** |
+
 ## SearXNG 配置
 
 | 配置项 | 值 | 说明 |

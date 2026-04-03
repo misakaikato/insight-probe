@@ -186,88 +186,72 @@ describe('KnowledgeGraphManager', () => {
   });
 
   describe('deriveNextQueries', () => {
-    it('returns unanswered questions as first priority', () => {
+    it('returns unanswered questions as first priority', async () => {
       const kgm = freshKG();
       kgm.addQuestionNode('未回答问题');
-      const queries = kgm.deriveNextQueries(4);
+      const queries = await kgm.deriveNextQueries(4);
       expect(queries.length).toBe(1);
       expect(queries[0].query).toBe('未回答问题');
       expect(queries[0].sourceType).toBe('question');
     });
 
-    it('deduplicates against existing queries by label', () => {
+    it('deduplicates against existing queries by label', async () => {
       const kgm = freshKG();
       kgm.addQuestionNode('已有查询');
       kgm.addSearchQueryNode('已有查询', '已有查询', 1, 5, ['searxng']);
-      const queries = kgm.deriveNextQueries(4);
+      const queries = await kgm.deriveNextQueries(4);
       expect(queries.length).toBe(0);
     });
 
-    it('deduplicates against existing queries by query field', () => {
+    it('deduplicates against existing queries by query field', async () => {
       const kgm = freshKG();
       kgm.addQuestionNode('新问题');
       kgm.addSearchQueryNode('另一个标签', '不同查询', 1, 5, ['searxng']);
-      const queries = kgm.deriveNextQueries(4);
+      const queries = await kgm.deriveNextQueries(4);
       expect(queries.length).toBe(1);
       expect(queries[0].query).toBe('新问题');
     });
 
-    it('returns entity queries from findings when no unanswered questions', () => {
+    it('derives queries from findings entities', async () => {
+      // 从 findings 的实体推导查询（本地逻辑，无需 API）
       const kgm = freshKG();
-      kgm.addFindingNode('发现1', [], { metadata: { entities: ['阿那亚'] } });
-      const queries = kgm.deriveNextQueries(4);
+      kgm.addFindingNode('发现1', [], { metadata: { entities: ['阿那亚', '北京'] } });
+      const queries = await kgm.deriveNextQueries(4);
+      // 有 findings 实体 → 返回实体作为查询
       expect(queries.length).toBeGreaterThan(0);
       expect(queries[0].sourceType).toBe('finding');
     });
 
-    it('uses multiple templates for different entities', () => {
-      const kgm = freshKG();
-      // Different entities should each get up to 3 templates
-      kgm.addFindingNode('发现1', [], { metadata: { entities: ['阿那亚'] } });
-      kgm.addFindingNode('发现2', [], { metadata: { entities: ['财神'] } });
-      kgm.addFindingNode('发现3', [], { metadata: { entities: ['黄瓦财神庙'] } });
-
-      const queries = kgm.deriveNextQueries(10);
-      expect(queries.length).toBeGreaterThanOrEqual(3);
-      const texts = queries.map(q => q.query);
-      // 查询文本现在包含实体名作为前缀（如 "阿那亚 理论背景与来源"）
-      expect(texts.some(q => q.includes('阿那亚'))).toBe(true);
-      expect(texts.some(q => q.includes('财神'))).toBe(true);
-      expect(texts.some(q => q.includes('黄瓦财神庙'))).toBe(true);
-    });
-
-    it('respects maxQueries limit', () => {
+    it('respects maxQueries limit', async () => {
       const kgm = freshKG();
       kgm.addQuestionNode('Q1');
       kgm.addQuestionNode('Q2');
       kgm.addQuestionNode('Q3');
-      const queries = kgm.deriveNextQueries(2);
+      const queries = await kgm.deriveNextQueries(2);
       expect(queries.length).toBe(2);
     });
 
-    it('filters findings by round when specified', () => {
+    it('returns questions in order when no API key', async () => {
       const kgm = freshKG();
-      kgm.addFindingNode('旧发现', [], { metadata: { entities: ['旧实体'], round: 1 } });
-      kgm.addFindingNode('新发现', [], { metadata: { entities: ['新实体'], round: 2 } });
-      const queries = kgm.deriveNextQueries(4, 3);
-      const queryTexts = queries.map(q => q.query);
-      // round 3 should include round>=2 findings, not round 1
-      // 查询文本现在包含实体名作为前缀
-      expect(queryTexts.some(q => q.includes('新实体'))).toBe(true);
-      expect(queryTexts.some(q => q.includes('旧实体'))).toBe(false);
+      kgm.addQuestionNode('问题A');
+      kgm.addQuestionNode('问题B');
+      const queries = await kgm.deriveNextQueries(4);
+      expect(queries.length).toBe(2);
+      expect(queries[0].query).toBe('问题A');
+      expect(queries[1].query).toBe('问题B');
     });
   });
 
   describe('isConverged', () => {
-    it('returns true when no more queries possible', () => {
+    it('returns true when no more queries possible', async () => {
       const kgm = freshKG();
-      expect(kgm.isConverged()).toBe(true);
+      expect(await kgm.isConverged()).toBe(true);
     });
 
-    it('returns false when unanswered questions exist', () => {
+    it('returns false when unanswered questions exist', async () => {
       const kgm = freshKG();
       kgm.addQuestionNode('还有问题');
-      expect(kgm.isConverged()).toBe(false);
+      expect(await kgm.isConverged()).toBe(false);
     });
   });
 

@@ -10,11 +10,16 @@
     "kg:stats": "tsx knowledge-graph.ts stats",
     "kg:analyze": "tsx knowledge-graph.ts analyze",
     "kg:mermaid": "tsx knowledge-graph.ts mermaid",
+    "kg:image": "tsx knowledge-graph.ts image",
+    "kg:report": "tsx knowledge-graph.ts report",
+    "kg:research-record": "tsx knowledge-graph.ts research-record",
     "kg:knowledge-list": "tsx knowledge-graph.ts knowledge-list",
+    "kg:add-findings": "tsx knowledge-graph.ts add-findings",
+    "kg:clean": "tsx knowledge-graph.ts clean",
     "research": "tsx research-runner.ts",
     "test": "bun test"
   },
   "dependencies": {
-    "tsx": "^4.7.0"
+    "tsx": "^4.21.0"
   }
 }

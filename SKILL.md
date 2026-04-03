@@ -1,61 +1,18 @@
 ---
 name: insight-probe
-description: |
-  图谱驱动的迭代式深度调研工具。使用 SearXNG + opencli 多站并发搜索，知识图谱作为唯一真相来源动态推导每轮搜索方向。
-  Use when: 用户需要进行深度调研、背景研究、多来源信息收集、竞争分析
-  Trigger: /probe, /insight, 调研, 研究, 深度调研, deep research, investigate
-  DO NOT TRIGGER when: 仅需要简单搜索而非深度研究、纯技术编码问题
+description: 深度调研工具
+trigger: 调研, 研究, 深入了解, 深度调研, deep research, investigate, 探究, probe, insight
+do_not_trigger: 简单搜索, 单一问题, 纯编码
 license: MIT
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   category: research
-  sources:
-    - SearXNG (本地聚合搜索)
-    - opencli (多站点 CLI)
-    - 知识图谱 (knowledge-graph.ts)
   searxng:
     endpoint: http://127.0.0.1:10086
     timeout: 30000
     engines: [google, bing, wikipedia, wikidata, duckduckgo, yandex]
     safe_search: 0
     categories: [general, news, science, web]
-  search:
-    # 多语言搜索配置
-    languages: [zh, en]  # 中文、英文
-    # 每个查询生成的语言变体数量
-    variants_per_query: 2
-    # 查询扩展模板（用于从实体生成多语言查询）
-    query_templates:
-      zh:
-        - "{entity}"
-        - "{entity} 是什么"
-        - "{entity} 详解"
-        - "{entity} 历史 起源"
-      en:
-        - "{entity}"
-        - "{entity} overview"
-        - "{entity} history origin"
-        - "{entity} detailed explanation"
-  opencli:
-    timeout: 30000
-    max_concurrent: 10
-    format: json
-    # 多语言搜索站点配置
-    sites:
-      zh:
-        - wikipedia      # 中文维基
-        - zhihu
-        - weibo
-        - bilibili
-        - xiaohongshu     # 小红书
-        - douban          # 豆瓣（电影+图书）
-      en:
-        - wikipedia_en    # 英文维基
-        - hackernews
-        - reddit
-        - arxiv
-        - stackoverflow
-        - v2ex            # 用 hot 命令
   research:
     max_rounds: 5
     queries_per_round: 4
@@ -72,7 +29,35 @@ metadata:
 
 # Insight Probe
 
-图谱驱动的迭代式深度调研。每一轮搜索方向由知识图谱中未回答的问题和新发现的实体决定，而非预设模板。
+图谱驱动的迭代式深度调研工具。每一轮搜索方向由知识图谱动态推导，而非预设模板。
+
+---
+
+## Quick Start
+
+直接对 Agent 说：
+
+```
+帮我调研一下史前大洪水
+研究一下卡巴拉神秘主义的起源
+深度调研 Rust 在嵌入式领域的应用
+```
+
+Agent 会自动创建调研项目，并发搜索多个来源，迭代深入直到收敛。
+
+---
+
+## 前置依赖
+
+使用前请确保以下服务已就绪：
+
+| 依赖 | 检查命令 | 说明 |
+|------|----------|------|
+| Bun | `bun --version` | 运行工具脚本 |
+| SearXNG | `curl http://127.0.0.1:10086` | 本地聚合搜索引擎 |
+| opencli | `opencli doctor` | 多站点搜索 + 页面读取 |
+
+> 如果 `opencli doctor` 报某个站点登录失败或 cookie 过期，运行 `opencli <site> login` 重新登录后重试。
 
 ---
 
@@ -80,11 +65,11 @@ metadata:
 
 | 用户意图 | 路由 | 操作 |
 |----------|------|------|
-| 开始新调研 | NEW_TOPIC | 创建目录结构 + 初始化图谱 |
-| 继续调研 | CONTINUE | 读取图谱 → 推导下一步 → 执行搜索 |
+| 开始新调研 | NEW_TOPIC | 创建目录 + 初始化图谱 |
+| 继续调研 | CONTINUE | 读取图谱 → AI 推导下一步 → 执行搜索 |
 | 查看进度 | STATS | 输出图谱统计摘要 |
 | 导出可视化 | MERMAID | 生成 Mermaid 图 |
-| 导出图片 | IMAGE | 生成美观 HTML 知识图谱 |
+| 导出图片 | IMAGE | 生成 HTML 知识图谱 |
 | 清理临时文件 | CLEAN | 删除 >24h 过期文件 |
 
 ---
@@ -94,27 +79,32 @@ metadata:
 | 操作 | 命令 |
 |------|------|
 | 创建调研 | `bun run kg new-topic "主题"` |
-| 继续调研 | `bun run kg next <topic_dir>` |
-| 执行调研 | `bun run research <topic_dir> [--analyze]` |
-| 分析页面 | `bun run kg analyze <topic_dir> [--max <n>]` |
-| 查看统计 | `bun run kg stats <topic_dir>` |
-| 导出图谱 | `bun run kg mermaid <topic_dir>` |
-| 导出图片 | `bun run kg image <topic_dir>` |
-| 导出知识列表 | `bun run kg knowledge-list <topic_dir> [--output <file>]` |
-| 清理过期 | `bun run kg clean <topic_dir>` |
+| 推导方向 | `bun run kg next <dir>` |
+| 执行采集 | `bun run research <dir>` |
+| 准备分析 | `bun run kg analyze <dir>` | 列出待分析页面，Agent 执行分析 |
+| 查看统计 | `bun run kg stats <dir>` |
+| 导出 Mermaid | `bun run kg mermaid <dir>` |
+| 导出图片 | `bun run kg image <dir>` |
+| 生成报告 | `bun run kg report <dir>` |
+| 生成记录 | `bun run kg research-record <dir>` |
+| 生成知识列表 | `bun run kg knowledge-list <dir>` |
+| 清理过期文件 | `bun run kg clean <dir>` |
 
 ---
 
 ## Core Principles
 
 - **ALWAYS** 从图谱推导搜索方向，禁止使用预设模板
-- **ALWAYS** 并发执行 SearXNG + 所有 opencli 站点搜索
-- **ALWAYS** 搜索结果保存到 `{topic_dir}/search_results/r{n}_q{m}_{source}.json`
+- **ALWAYS** 每轮搜索使用 `opencli web search <keyword> --limit <n>` 搜索所有适配器
+- **ALWAYS** 搜索结果保存到 `{topic_dir}/search_results/r{n}_q{m}_opencli.json`
 - **ALWAYS** 不同来源的同一 URL 必须去重，合并后择优抓取
 - **ALWAYS** 在 `search_query` 节点的 `sources` 字段记录所有使用的来源
+- **ALWAYS** 所有页面读取统一使用 `opencli web read --url "xxx"`，不要用 curl 抓取
 - **NEVER** 直接复用已有 query 节点的相同文本（检查 `label` 和 `query` 字段）
 - **NEVER** 在 `browser: true` 站点未经 `opencli doctor` 检查连通性就直接使用
 - **NEVER** 使用 xueqiu 进行通用主题调研（仅限股票）
+- **NEVER** 使用 curl 直接抓取页面（统一使用 `opencli web read`）
+- **ALWAYS** 当 `opencli doctor` 或搜索/读取操作返回登录失败、cookie 过期等错误时，**立即告知用户**检查该站点是否需要登录，并提示运行 `opencli <site> login`
 
 ---
 
@@ -138,108 +128,121 @@ temp/{topic}_{timestamp}/
 
 ## Anti-Patterns
 
-- ❌ 使用预设模板生成搜索关键词 → ✅ 从图谱 `deriveNextQueries` 动态推导
-- ❌ 仅用 SearXNG 不开 opencli → ✅ 必须并发所有来源
-- ❌ 仅搜索单一语言 → ✅ 中英文双语并发搜索
+- ❌ 使用预设模板生成搜索关键词 → ✅ 从图谱 AI 动态推导
+- ❌ 使用分散的搜索命令 → ✅ 统一用 `opencli web search`
 - ❌ 不记录 `sources` 字段 → ✅ 每次搜索必须记录来源数组
 - ❌ 同一 URL 重复抓取 → ✅ 不同来源先去重再抓取
-- ❌ V2EX 用 `search` 命令 → ✅ 用 `opencli v2ex hot`
 - ❌ 雪球用于通用调研 → ✅ 仅限股票相关
-- ❌ 用 emoji 作为状态标识 → ✅ 用文字 `unanswered`/`answered`
-- ❌ 用 curl 抓取动态页面 → ✅ 用 `opencli web read`（支持 JS 渲染）
+- ❌ 用 curl 抓取页面 → ✅ 统一用 `opencli web read --url "xxx"`
 
 ---
 
 ## Checklist
 
-- [ ] 确认 SearXNG 服务运行中（`curl http://127.0.0.1:10086`）
-- [ ] `browser: true` 站点已通过 `opencli doctor` 检查
+- [ ] `opencli doctor` 检查各站点连通性
 - [ ] 每轮搜索后更新 `knowledge_graph.json`
 - [ ] `search_query` 节点包含完整的 `sources` 数组
-- [ ] 搜索使用中英文双语（zh + en）并发
-- [ ] 发现新实体后添加到 finding 的 `metadata.entities`
-- [ ] 不同来源相同 URL 已去重
-- [ ] 页面抓取使用 `opencli web read`（支持 JS 渲染 + 内容去噪）
+- [ ] 搜索使用中英文双语并发
+- [ ] 页面读取统一使用 `opencli web read`
+- [ ] 页面分析由 Agent 完成（使用 `references/prompts.md` 中的分析框架）
 - [ ] 收敛判断：有 `unanswered` question 才继续
-- [ ] 最终报告包含可靠性评级
+- [ ] 最终报告包含可靠性评级和事实引用来源
 
 ---
 
-## kg 工具命令
+## Agent 分析循环
 
-| 命令 | 说明 |
-|------|------|
-| `bun run kg new-topic "主题"` | 创建新调研目录和图谱 |
-| `bun run kg next <dir>` | 从图谱推导下一步搜索方向 |
-| `bun run research <dir>` | 执行数据采集（搜索+抓取），生成 pages_manifest.json |
-| `bun run research <dir> --analyze` | 执行数据采集 + 自动分析（采集后立即分析页面） |
-| `bun run kg analyze <dir> [--max <n>]` | 分析页面并提取知识（默认分析前5页） |
-| `bun run kg stats <dir>` | 输出图谱统计摘要 |
-| `bun run kg mermaid <dir>` | 导出 Mermaid 可视化 |
-| `bun run kg image <dir>` | 导出美观 HTML 知识图谱图片 |
-| `bun run kg report <dir>` | 生成最终综合报告 |
-| `bun run kg research-record <dir>` | 生成调研过程记录 |
-| `bun run kg knowledge-list <dir>` | 生成知识列表 |
-| `bun run kg clean <dir>` | 清理 >24h 过期文件 |
-| `bun test` | 运行单元测试（37 tests） |
+**这是 Agent 使用自己的 LLM 进行分析的完整流程：**
 
-**注意**: `kg next` 仅推导搜索方向，不执行搜索。实际搜索和抓取由 `research` 命令完成。
+### 流程概览
+
+```
+research 采集页面 → kg analyze 查看待分析页面 → Agent 读取页面 → Agent 用自己的 LLM 分析 → 添加到图谱
+```
+
+### 具体步骤
+
+**Step 1: 运行 `bun run kg analyze <dir>` 查看待分析页面**
+
+```
+bun run kg analyze /path/to/topic
+```
+
+输出会列出所有待分析的页面文件路径。
+
+**Step 2: Agent 读取页面文件并用自己 LLM 分析**
+
+对每个页面文件，Agent 调用自己的 LLM 进行分析，使用的 prompt 框架见 `references/prompts.md`。
+
+分析后输出 JSON 格式的 findings。
+
+**Step 3: 将 findings 添加到图谱**
+
+```bash
+# 将分析结果的 JSON 通过管道传给 kg add-findings
+echo '[{"label": "发现内容", "source_nodes": ["webpage_001"], "metadata": {"entities": ["实体1"], "reliability": "high"}}]' \
+  | bun run kg:add-findings /path/to/topic
+```
+
+或者一次性添加多条：
+
+```bash
+# 分析多个页面后，将所有 findings 合并添加
+cat << 'EOF' | bun run kg:add-findings /path/to/topic
+[
+  {"label": "发现1", "source_nodes": ["webpage_001"], "metadata": {"entities": ["实体A"], "reliability": "high"}},
+  {"label": "发现2", "source_nodes": ["webpage_002"], "metadata": {"entities": ["实体B"], "reliability": "medium"}}
+]
+EOF
+```
+
+### 分析输出格式
+
+参考 `references/prompts.md` 中的完整格式，核心输出：
+
+```json
+{
+  "findings": [
+    {"fact": "事实陈述", "category": "事件|概念|人物|地点", "significance": "重要性"}
+  ],
+  "entities": [
+    {"name": "实体名", "type": "人物|地点|组织|事件|概念", "description": "描述"}
+  ],
+  "relations": [
+    {"from": "实体A", "to": "实体B", "relation": "关系类型"}
+  ],
+  "followup_questions": ["后续问题1", "后续问题2"]
+}
+```
+
+### 注意事项
+
+- **不要调用任何外部 API** 进行分析，只用 Agent 自身的 LLM 能力
+- **每个页面都要分析**，不要遗漏
+- **分析要深入**，不只是表面信息，要主动发现关联和空白
+- **发现新实体**时，在 `metadata.entities` 中记录
+- **有新问题**时，通过 `followup_questions` 字段提出
 
 ---
 
 ## 产出体系
 
-调研完成后，会在 `{topic_dir}/reports/` 目录下生成以下文件：
+调研完成后，在 `{topic_dir}/reports/` 目录生成：
 
 | 文件 | 说明 |
 |------|------|
-| `final_report.md` | 最终综合报告（核心发现、实体关系、调研过程） |
-| `research_record.md` | 调研记录（按轮次的过程记录） |
-| `knowledge_list.md` | 知识列表（按类别整理的知识条目） |
-| `knowledge_graph.html` | 知识图谱可视化（交互式力导向图） |
-| `knowledge_graph.json` | 原始图谱数据（节点、边、动态关系） |
-
----
-
-## 动态关系发现
-
-知识图谱支持从内容中**自动发现实体关系**：
-
-1. 在分析页面时，提取实体之间的关系
-2. 这些关系存储在 `dynamicRelations` 数组中
-3. 关系不限于预定义类型，可自由发现任意关系
-4. 关系可追溯来源
-
-**关系结构**：
-```typescript
-{
-  from: "实体A",
-  to: "实体B",
-  relation: "关系类型",
-  source: "来源描述"
-}
-```
-
----
-
-## 知识版本追踪
-
-当已有知识被更新时，系统会保留历史版本：
-
-1. 每次更新会创建新版本号
-2. 历史版本保存在 `versionHistory` 中
-3. 可以查看知识的完整演变过程
+| `final_report.md` | 最终综合报告（核心发现 + 事实引用来源） |
+| `research_record.md` | 调研记录（按轮次过程） |
+| `knowledge_list.md` | 猱识列表（按类别整理） |
+| `knowledge_graph.html` | 猱识图谱可视化（交互式力导向图） |
+| `knowledge_graph.json` | 原始图谱数据 |
 
 ---
 
 ## References
 
-详细文档见 `references/` 目录：
-
 - [research-flow.md](references/research-flow.md) — 详细调研流程
 - [prompts.md](references/prompts.md) — 分析 Prompt 模板
-- [search-sources.md](references/search-sources.md) — opencli 站点完整配置与命令
+- [search-sources.md](references/search-sources.md) — opencli 站点配置
 - [reliability.md](references/reliability.md) — 可靠性评级标准
 - [troubleshooting.md](references/troubleshooting.md) — 常见问题排查
-
-代码工具：`tools/knowledge-graph.ts`
