@@ -32,12 +32,12 @@
 
 ## 知识图谱加载失败
 
-**症状**: `bun run kg stats` 报错或显示空图谱
+**症状**: `bun run kg stats` 或 `node run kg stats` 报错或显示空图谱
 
 **排查步骤**:
 1. 确认 `knowledge_graph.json` 文件存在且格式正确
 2. 检查 JSON 是否有效（无尾逗号等语法错误）
-3. 备份后删除重建：`bun run kg new-topic "<同主题>"`
+3. 备份后删除重建：`bun run kg new-topic "<同主题>"` 或 `node run kg new-topic "<同主题>"`
 
 ## V2EX 无 search 命令
 

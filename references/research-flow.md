@@ -21,7 +21,7 @@
 
 ## 阶段 1: 数据采集
 
-运行 `bun run research-runner.ts run <topic_dir>`
+运行 `bun run research-runner.ts run <topic_dir>` 或 `node run research-runner.ts run <topic_dir>`
 
 ```
 research-runner.ts:
@@ -51,10 +51,10 @@ research-runner.ts:
 
 ### Agent 分析步骤
 
-1. **运行 `bun run kg analyze <dir>`** 查看待分析页面列表
+1. **运行 `bun run kg analyze <dir>` 或 `node run kg analyze <dir>`** 查看待分析页面列表
 2. **读取页面文件**（路径在 manifest 中）
 3. **使用 `references/prompts.md` 中的 prompt 框架**，调用自己的 LLM 分析页面内容
-4. **将 findings JSON 通过管道传给 `bun run kg:add-findings`** 添加到图谱
+4. **将 findings JSON 通过管道传给 `bun run kg:add-findings` 或 `node run kg:add-findings`** 添加到图谱
 
 ### 添加 findings 命令
 
@@ -62,9 +62,14 @@ research-runner.ts:
 # 单条
 echo '{"label": "发现内容", "source_nodes": ["webpage_001"], "metadata": {"entities": ["实体"], "reliability": "high"}}' \
   | bun run kg:add-findings <dir>
+# 或
+echo '{"label": "发现内容", "source_nodes": ["webpage_001"], "metadata": {"entities": ["实体"], "reliability": "high"}}' \
+  | node run kg:add-findings <dir>
 
 # 多条
 cat findings.json | bun run kg:add-findings <dir>
+# 或
+cat findings.json | node run kg:add-findings <dir>
 ```
 
 ### findings 格式
@@ -157,7 +162,7 @@ opencli web read --url "{url}" --output "{topic_dir}/pages" -f json
 
 ### Step 5: 分析页面内容
 
-**执行方式**：运行 `bun run kg analyze <topic_dir> [--max <n>]`
+**执行方式**：运行 `bun run kg analyze <topic_dir> [--max <n>]` 或 `node run kg analyze <topic_dir> [--max <n>]`
 
 读取页面文件并提取：
 
@@ -174,7 +179,7 @@ opencli web read --url "{url}" --output "{topic_dir}/pages" -f json
 
 **执行方式**：读取 Markdown 文件 → 使用规则分析提取知识 → 将结果添加到图谱
 
-**自动分析**：使用 `bun run research <topic_dir> --analyze` 可在采集完成后自动执行此步骤
+**自动分析**：使用 `bun run research <topic_dir> --analyze` 或 `node run research <topic_dir> --analyze` 可在采集完成后自动执行此步骤
 
 ### Step 6: 更新图谱
 
