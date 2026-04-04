@@ -7,6 +7,7 @@ import { writeJson } from "../utils/json";
 import { initContext, getContext } from "./context";
 import { generateId } from "../utils/ids";
 import type { Task } from "../core/models/types";
+import { TaskChecklistService } from "../core/services/task-checklist-service";
 
 import { registerNodeCommand } from "./commands/node";
 import { registerEdgeCommand } from "./commands/edge";
@@ -70,12 +71,15 @@ program
 			};
 			store.createTask(task);
 			store.save();
+			const taskChecklist = new TaskChecklistService(store).initializeTask(taskId);
 
 			writeJson({
 				topic,
 				dir: dirPath,
 				file: join(dirPath, "kg.json"),
 				taskId,
+				taskDir: taskChecklist.taskDir,
+				tasksFile: taskChecklist.tasksFile,
 			});
 		} catch (e) {
 			writeError((e as Error).message);

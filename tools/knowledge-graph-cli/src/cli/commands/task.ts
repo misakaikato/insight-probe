@@ -20,7 +20,7 @@ export function registerTaskCommand(program: Command): void {
 		.requiredOption("--goal <goal>", "Task goal")
 		.action((opts: { title: string; goal: string }) => {
 			try {
-				const { store } = getContext();
+				const { store, services } = getContext();
 				const task: Task = {
 					id: generateId("Task"),
 					title: opts.title,
@@ -31,7 +31,14 @@ export function registerTaskCommand(program: Command): void {
 					updatedAt: now(),
 				};
 				store.createTask(task);
-				writeJson(task);
+				store.save();
+				const checklist = services.taskChecklist.initializeTask(task.id);
+				writeJson({
+					...task,
+					taskDir: checklist.taskDir,
+					tasksFile: checklist.tasksFile,
+					checklistSummary: checklist.summary,
+				});
 			} catch (e) {
 				writeError((e as Error).message);
 			}
@@ -63,6 +70,62 @@ export function registerTaskCommand(program: Command): void {
 					: undefined;
 				const tasks = store.listTasks(predicate);
 				writeJson(tasks);
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
+
+	cmd
+		.command("checklist <id>")
+		.description("Read the external workflow checklist for a task")
+		.action((id: string) => {
+			try {
+				const { services } = getContext();
+				const checklist = services.taskChecklist.readChecklist(id);
+				writeJson(checklist);
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
+
+	cmd
+		.command("add-item <id>")
+		.description("Append a new item to tasks.md for a task")
+		.requiredOption("--text <text>", "Checklist item text")
+		.option("--section <section>", "Checklist section name", "Dynamic Tasks")
+		.action((id: string, opts: { text: string; section: string }) => {
+			try {
+				const { services } = getContext();
+				const item = services.taskChecklist.appendItem(id, opts.text, opts.section);
+				writeJson(item);
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
+
+	cmd
+		.command("check <id>")
+		.description("Mark an item in tasks.md as completed")
+		.requiredOption("--item <itemRef>", "Checklist item ID or exact text")
+		.action((id: string, opts: { item: string }) => {
+			try {
+				const { services } = getContext();
+				const item = services.taskChecklist.setItemCompletion(id, opts.item, true);
+				writeJson(item);
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
+
+	cmd
+		.command("uncheck <id>")
+		.description("Mark an item in tasks.md as pending again")
+		.requiredOption("--item <itemRef>", "Checklist item ID or exact text")
+		.action((id: string, opts: { item: string }) => {
+			try {
+				const { services } = getContext();
+				const item = services.taskChecklist.setItemCompletion(id, opts.item, false);
+				writeJson(item);
 			} catch (e) {
 				writeError((e as Error).message);
 			}

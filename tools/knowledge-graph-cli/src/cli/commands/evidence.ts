@@ -1,6 +1,8 @@
 import type { Command } from "commander";
 import { getContext } from "../context";
 import type { EvidenceLinkRole } from "../../core/models/types";
+import { markEvidenceLinkWorkflow, markNodeWorkflow } from "../checklist";
+import { WORKFLOW_ITEMS } from "../../core/services/task-checklist-service";
 import { writeJson, parseJsonFile, parseJsonStdin } from "../../utils/json";
 
 function writeError(message: string): never {
@@ -15,7 +17,8 @@ export function registerEvidenceCommand(program: Command): void {
 		.command("add")
 		.description("Add a new evidence node")
 		.option("--json-in <file>", "JSON file path (use - for stdin)")
-		.action(async (opts: { jsonIn?: string }) => {
+		.option("--task <taskId>", "Link the evidence to a task")
+		.action(async (opts: { jsonIn?: string; task?: string }) => {
 			try {
 				const { services } = getContext();
 				let data: {
@@ -25,13 +28,18 @@ export function registerEvidenceCommand(program: Command): void {
 					locator?: Record<string, unknown>;
 					confidence?: number;
 					attrs?: Record<string, unknown>;
+					taskId?: string;
 				};
 				if (opts.jsonIn && opts.jsonIn !== "-") {
 					data = parseJsonFile<typeof data>(opts.jsonIn);
 				} else {
 					data = await parseJsonStdin<typeof data>();
 				}
+				if (opts.task) {
+					data.taskId = opts.task;
+				}
 				const evidence = services.evidence.addEvidence(data);
+				markNodeWorkflow(services, evidence, [WORKFLOW_ITEMS.writeGraph]);
 				writeJson(evidence);
 			} catch (e) {
 				writeError((e as Error).message);
@@ -69,6 +77,13 @@ export function registerEvidenceCommand(program: Command): void {
 					opts.target,
 					opts.role as EvidenceLinkRole,
 					opts.confidence,
+				);
+				markEvidenceLinkWorkflow(
+					services,
+					opts.evidence,
+					opts.targetType as "node" | "edge",
+					opts.target,
+					[WORKFLOW_ITEMS.writeGraph],
 				);
 				writeJson(link);
 			} catch (e) {

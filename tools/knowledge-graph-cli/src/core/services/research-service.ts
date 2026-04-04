@@ -4,6 +4,7 @@ import type { GraphService } from "./graph-service";
 import type { LlmTaskService } from "./llm-task-service";
 import type { QuestionService } from "./question-service";
 import type { GapService } from "./gap-service";
+import type { TaskChecklistService } from "./task-checklist-service";
 
 export type ResearchPhase = "search" | "extract" | "normalize" | "gap_detection" | "done";
 
@@ -18,6 +19,19 @@ export interface ResearchContinueResult {
 	};
 	openQuestions: BaseNode[];
 	gaps: BaseNode[];
+	workflowChecklist?: {
+		tasksFile: string;
+		summary: {
+			total: number;
+			completed: number;
+			pending: number;
+		};
+		pendingItems: Array<{
+			id: string;
+			text: string;
+			section: string;
+		}>;
+	};
 	shouldContinue: boolean;
 	round: number;
 	message: string;
@@ -30,31 +44,30 @@ export class ResearchService {
 		private llmTask: LlmTaskService,
 		private questionService: QuestionService,
 		private gapService: GapService,
+		private taskChecklistService: TaskChecklistService,
 	) {}
 
 	/**
 	 * Get the current research round from the Task node.
-	 * Returns 1 if no round has been recorded yet.
+	 * Returns the next round number to plan.
 	 */
 	private getCurrentRound(taskId: string): number {
 		const task = this.store.getTask(taskId);
 		if (!task) return 1;
-		return (task.attrs?.round as number) ?? 1;
+		return ((task.attrs?.round as number) ?? 0) + 1;
 	}
 
 	/**
-	 * Increment the round counter in the Task node.
+	 * Record the round that has just been planned.
 	 */
-	private incrementRound(taskId: string): number {
+	private recordRound(taskId: string, round: number): number {
 		const task = this.store.getTask(taskId);
 		if (!task) return 1;
-		const currentRound = (task.attrs?.round as number) ?? 0;
-		const newRound = currentRound + 1;
 		this.store.updateTask(taskId, {
-			attrs: { ...task.attrs, round: newRound },
+			attrs: { ...task.attrs, round },
 		});
 		this.store.save();
-		return newRound;
+		return round;
 	}
 
 	/**
@@ -119,12 +132,20 @@ export class ResearchService {
 
 		// Determine phase
 		const phase = this.determinePhase(openQuestions, gaps, stats);
+		const checklist = this.taskChecklistService.syncResearchRoundPlan({
+			taskId,
+			round: currentRound,
+			phase,
+			openQuestions,
+			gaps,
+			hasNextQueries: nextQueriesEnvelope !== null,
+		});
 
 		// Determine if we should continue
 		const shouldContinue = phase !== "done" && currentRound <= maxRounds;
 
-		// Increment round for next iteration
-		const nextRound = this.incrementRound(taskId);
+		// Record the round that has just been planned
+		this.recordRound(taskId, currentRound);
 
 		// Build message
 		const message = this.buildPhaseMessage(phase, openQuestions, gaps, stats, currentRound);
@@ -135,8 +156,17 @@ export class ResearchService {
 			stats,
 			openQuestions,
 			gaps,
+			workflowChecklist: {
+				tasksFile: checklist.tasksFile,
+				summary: checklist.summary,
+				pendingItems: checklist.pendingItems.map((item) => ({
+					id: item.id,
+					text: item.text,
+					section: item.section,
+				})),
+			},
 			shouldContinue,
-			round: nextRound,
+			round: currentRound,
 			message,
 		};
 	}

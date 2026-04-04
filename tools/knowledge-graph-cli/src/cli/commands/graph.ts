@@ -1,5 +1,7 @@
 import type { Command } from "commander";
 import { getContext } from "../context";
+import { markTaskWorkflow } from "../checklist";
+import { WORKFLOW_ITEMS } from "../../core/services/task-checklist-service";
 import { writeJson } from "../../utils/json";
 
 function writeError(message: string): never {
@@ -70,6 +72,7 @@ export function registerGraphCommand(program: Command): void {
 			try {
 				const { services } = getContext();
 				const stats = services.graph.getStats(opts.task);
+				markTaskWorkflow(services, opts.task, [WORKFLOW_ITEMS.qualityGate]);
 				writeJson(stats);
 			} catch (e) {
 				writeError((e as Error).message);
@@ -84,6 +87,7 @@ export function registerGraphCommand(program: Command): void {
 			try {
 				const { services } = getContext();
 				const result = services.graph.lint(opts.task);
+				markTaskWorkflow(services, opts.task, [WORKFLOW_ITEMS.qualityGate]);
 				writeJson(result);
 			} catch (e) {
 				writeError((e as Error).message);

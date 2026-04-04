@@ -25,7 +25,7 @@ metadata:
 | 查看统计 | STATS | `kg graph stats --dir <dir>` |
 | 图谱检查 | LINT | `kg graph lint --dir <dir>` |
 | 检测缺口 | GAP | `kg gap detect --dir <dir>` |
-| 生成报告 | REPORT | `kg report generate --dir <dir>` → 生成带引用的报告 |
+| 生成报告 | REPORT | `kg llm generate-report --topic <主题> --dir <dir>` → LLM 生成结构化报告 |
 
 ---
 
@@ -53,10 +53,28 @@ alias kg="bun run /Users/mayu/Projects/Agent/skills/insight-probe/tools/knowledg
 - **ALWAYS** 页面读取使用 `opencli web read --url "xxx"`
 - **ALWAYS** 来源写入图谱：`echo '{...}' | kg source add --json-in - --dir <dir>`
 - **ALWAYS** 搜索结果保存到 `{dir}/search_results/r{n}_q{m}_*.json`
+- **ALWAYS** 维护任务外置记忆：每个 `taskId` 对应 `{dir}/tasks/<taskId>/tasks.md`；`kg research continue` 会自动追加本轮计划，高频图谱命令会自动勾选对应步骤，临时新增工作仍需手动追加
 - **NEVER** 让 CLI 直接调用 LLM — `kg llm *` 只输出任务信封，Agent 自身执行
 - **NEVER** 使用 xueqiu 进行通用调研（仅限股票）
 - **NEVER** 跳过 `kg graph lint` — 每轮结束时检查图谱质量
 - **NEVER** 跳过 `kg llm extract-*` — 必须用 LLM Task Envelope 的 recommendedPrompt 深度提取，禁止直接 upsert 一句话 claim
+- **FIRST SEARCH CONSTRAINT** 当图谱为空（第一轮冷启动）时，搜索词必须**保持用户原始表述的完整语义**，禁止对主题进行过多前置加工或假设。如果用户表述存在歧义或过于宽泛，应先基于完整语义搜索，再根据搜索结果判断是否需要澄清或收窄。
+
+**解释**：冷启动时图谱无上下文，`next-search-queries` 只能依赖 LLM 对主题的先验知识。直接跳到预设的"认知偏差"等框架会窄化主题。例如"自然随机性和人类的认知"不应被窄化为"随机性认知偏差"，而应先搜索"自然随机性 认知"、"randomness cognition"等保持语义完整的表述。
+
+| 场景 | 做法 |
+|------|------|
+| 用户表述清晰、语义完整 | 直接作为搜索词，不做前置假设 |
+| 用户表述宽泛模糊 | 先搜索，根据结果再判断是否需要澄清 |
+| 用户表述有明显歧义 | 先搜索，同时基于合理解读生成补充搜索 |
+
+- **CONFIRM BEFORE FIRST SEARCH** 冷启动时，在调用 `next-search-queries` 之前，**必须**先向用户确认对其调研主题的理解。说明：① 你对主题的初步解读（不预设框架，基于语义完整理解）；② 计划从哪些维度展开探索；③ 请求用户确认或纠正。如果用户提出纠正，据此调整后续搜索策略。
+
+**示例**：
+> 我对"自然随机性和人类的认知"的理解：
+> - 这个主题涉及两个方面：① 自然随机性的科学定义和本质；② 人类如何认知/理解随机性，以及这种认知有哪些特点和局限
+> - 我计划从以下维度展开探索：自然随机性的数学和物理基础、人类对随机性的直觉判断特点、随机性与pattern recognition的关系等
+> - 请确认这个理解是否准确，或者你有其他想要重点探讨的方向？
 
 ---
 
@@ -74,16 +92,35 @@ alias kg="bun run /Users/mayu/Projects/Agent/skills/insight-probe/tools/knowledg
 
 ```bash
 kg new-topic "Gemma4 模型评测"
-# → 输出：{ topic, dir, file }
+# → 输出：{ topic, dir, file, taskId, taskDir, tasksFile }
 # 记住 dir 路径，后续所有命令都用 --dir <dir>
 
 # 创建任务
 kg task create --title "调研任务" --goal "目标" --dir <dir>
+# → 自动创建 {dir}/tasks/<taskId>/tasks.md
+```
+
+**⚠️ 冷启动确认步骤**：初始化任务后，**必须**先向用户确认对其调研主题的理解，再调用 `kg llm next-search-queries`。说明你对主题的初步解读（保持语义完整，不预设框架）、计划探索的维度，并请求用户纠正或补充。
+
+# 查看 / 追加 / 勾选任务项
+kg task checklist <taskId> --dir <dir>
+kg task add-item <taskId> --text "补充第三方验证来源" --dir <dir>
+kg task check <taskId> --item <taskItemId> --dir <dir>
+kg task uncheck <taskId> --item <taskItemId> --dir <dir>
 ```
 
 ---
 
 ## CONTINUE 路由：调研循环
+
+先用 `research continue` 刷新本轮计划：
+
+```bash
+kg research continue --task <taskId> --dir <dir>
+# → 自动在 tasks.md 追加 `Round N` 小节
+# → 自动勾选“从图谱推导下一步搜索方向”
+# → 返回当前 phase / nextQueries / checklist 摘要
+```
 
 ### Step 1: 推导搜索方向
 
@@ -333,6 +370,7 @@ kg llm generate-questions [--task <taskId>] --dir <dir>
 kg llm generate-hypotheses [--task <taskId>] --dir <dir>
 kg llm next-search-queries [--task <taskId>] --dir <dir>
 kg llm assess-evidence --claim <id> --dir <dir>
+kg llm generate-report [--task <taskId>] [--topic <topic>] --dir <dir>
 ```
 
 所有 `llm` 命令输出 `LlmTaskEnvelope` JSON：
@@ -349,6 +387,7 @@ kg llm assess-evidence --claim <id> --dir <dir>
 ```
 
 Agent 用 `recommendedPrompt` 调用自身 LLM，按 `outputSchema` 解析结果，用 `executionHint.suggestedCommand` 写回图谱。
+当传入 `--task <taskId>` 时，信封会额外包含 `tasks.md` 的未完成事项，用于约束当前流程。
 
 ---
 
@@ -427,7 +466,8 @@ proposed → supported → deprecated
 
 | 文件 | 生成方式 |
 |------|----------|
-| `final_report.md` | `kg report generate` → 基于图谱生成带引用的报告 |
+| `final_report.md` | `kg llm generate-report` → LLM 生成结构化报告（推荐） |
+| `final_report.md` | `kg report generate` → 程序化报告（快速检查用） |
 | `research_record.md` | 调研过程记录（Agent 维护） |
 | `kg.json` | 图谱原始数据（CLI 自动维护） |
 
@@ -435,22 +475,64 @@ proposed → supported → deprecated
 
 ## 报告生成与引用
 
-### `kg report generate` — 生成带引用的最终报告
+### `kg llm generate-report` — 生成 LLM 填充的丰富报告
+
+```bash
+kg llm generate-report --topic <研究主题> --task <taskId> --dir <dir>
+```
+
+**功能**：
+1. 遍历图谱中的 Claim，获取其关联的 Evidence 和 Source
+2. 汇总所有 Question、Gap 和来源信息
+3. 调用 LLM 生成结构化报告，包含：
+   - 执行摘要
+   - 背景介绍
+   - 核心发现（每个发现包含机制解释、证据引用、局限性）
+   - 开放问题
+   - 知识缺口
+   - 参考文献
+
+**报告结构**：
+
+```markdown
+# 研究报告：{主题}
+
+## 执行摘要
+基于对...的系统调研，本报告揭示了...
+
+## 背景介绍
+### 研究主题定义
+### 研究重要性
+### 当前研究状态
+
+## 核心发现
+
+### 发现一：{标题}
+**详细论述**：{100-200字，包含机制解释和证据链接}
+**关键证据引用**：[{证据片段}] [1][2]
+**局限性**：{如有}
+
+...
+
+## 开放问题
+- {问题1}（优先级: 0.9）
+- {问题2}（优先级: 0.8）
+
+## 知识缺口
+- {缺口1}（类型: insufficient_evidence，严重度: 0.5）
+
+## 参考文献
+[1] {来源标题}. {URL}
+[2] {来源标题}. {URL}
+```
+
+### `kg report generate` — 旧版程序化报告
 
 ```bash
 kg report generate --task <taskId> [--output final_report.md]
 ```
 
-**功能**：
-1. 遍历图谱中的 Claim，获取其关联的 Evidence
-2. 追溯 Evidence → Source，建立引用关系
-3. 为每个 Source 分配编号，生成带 `[1]`、`[2]` 标注的报告正文
-4. 报告末尾自动生成参考文献列表
-
-**引用规则**：
-- Claim 旁标注其 supporting evidence 所对应的 Source 编号
-- 同一 Source 被多次引用时只占一个编号，按出现顺序排序
-- 未被任何 evidence 引用的 Claim 标注 `[无引证]`
+保留此命令用于快速检查图谱引用完整性，输出简单的 claim 列表。
 
 **输出格式**：
 
@@ -498,9 +580,12 @@ kg source get <evidence.sourceId> --dir <dir>
 
 ```
 temp/{topic}_{timestamp}/
-├── kg.json            # 唯一真相来源（CLI 维护）
-├── search_results/    # 搜索原始结果
-└── pages/             # 抓取页面全文
+├── kg.json              # 唯一真相来源（CLI 维护）
+├── search_results/      # 搜索原始结果
+├── pages/               # 抓取页面全文
+└── tasks/
+    └── {taskId}/
+        └── tasks.md     # 外置流程记忆 / checklist
 ```
 
 ---
@@ -509,6 +594,7 @@ temp/{topic}_{timestamp}/
 
 - [ ] `opencli doctor` 检查连通性（首次使用 browser 站点）
 - [ ] `kg new-topic` 创建目录，记住 `--dir` 路径
+- [ ] 每个任务检查 `{dir}/tasks/<taskId>/tasks.md`，确认本轮待办
 - [ ] 每个搜索结果写入 Source 节点
 - [ ] 搜索结果保存到 `search_results/`
 - [ ] 页面用 `opencli web read` 抓取
@@ -517,6 +603,8 @@ temp/{topic}_{timestamp}/
 - [ ] Claim ≥50字，包含完整知识（机制+条件+证据）
 - [ ] Evidence ≥20字，直接引用原文
 - [ ] 每轮结束：`kg graph lint` + `kg gap detect` + `kg graph stats`（检查深度）
+- [ ] 优先依赖自动同步：`research continue`、`source add/update`（正文齐全时）、`claim add`、`question add`、`hypothesis add`、`evidence add/link`、`edge create`、`gap detect`、`graph stats/lint`
+- [ ] 遇到临时新增工作或自动同步未覆盖的动作，再用 `kg task check` / `kg task add-item`
 - [ ] 报告每个发现标注可靠性等级
 - [ ] `kg report generate` 生成最终报告（深度达标后执行）
 

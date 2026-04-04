@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { BaseNode, Edge, EvidenceLink } from "../models/types";
 
 // ── Node Kind ──
 
@@ -170,3 +171,44 @@ export const SchemaByKind: Record<string, z.ZodTypeAny> = {
 	Task: BaseNodeSchema.extend({ kind: z.literal("Task") }),
 	Value: BaseNodeSchema.extend({ kind: z.literal("Value") }),
 };
+
+function formatSchemaErrors(error: z.ZodError): string {
+	return error.issues
+		.map((issue) => {
+			const path = issue.path.length > 0 ? issue.path.join(".") : "root";
+			return `${path}: ${issue.message}`;
+		})
+		.join("; ");
+}
+
+export function validateNode(node: BaseNode): BaseNode {
+	const schema = SchemaByKind[node.kind];
+	if (!schema) {
+		throw new Error(`Unsupported node kind: ${node.kind}`);
+	}
+
+	const result = schema.safeParse(node);
+	if (!result.success) {
+		throw new Error(`Invalid ${node.kind} node: ${formatSchemaErrors(result.error)}`);
+	}
+
+	return result.data as BaseNode;
+}
+
+export function validateEdge(edge: Edge): Edge {
+	const result = EdgeSchema.safeParse(edge);
+	if (!result.success) {
+		throw new Error(`Invalid edge: ${formatSchemaErrors(result.error)}`);
+	}
+
+	return result.data;
+}
+
+export function validateEvidenceLink(link: EvidenceLink): EvidenceLink {
+	const result = EvidenceLinkSchema.safeParse(link);
+	if (!result.success) {
+		throw new Error(`Invalid evidence link: ${formatSchemaErrors(result.error)}`);
+	}
+
+	return result.data;
+}

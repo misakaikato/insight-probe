@@ -1,6 +1,8 @@
 import type { Command } from "commander";
 import { getContext } from "../context";
 import type { ClaimStatus } from "../../core/models/types";
+import { markNodeWorkflow } from "../checklist";
+import { WORKFLOW_ITEMS } from "../../core/services/task-checklist-service";
 import { writeJson, parseJsonFile, parseJsonStdin } from "../../utils/json";
 
 function writeError(message: string): never {
@@ -15,7 +17,8 @@ export function registerClaimCommand(program: Command): void {
 		.command("add")
 		.description("Add a new claim")
 		.option("--json-in <file>", "JSON file path (use - for stdin)")
-		.action(async (opts: { jsonIn?: string }) => {
+		.option("--task <taskId>", "Link the claim to a task")
+		.action(async (opts: { jsonIn?: string; task?: string }) => {
 			try {
 				const { services } = getContext();
 				let data: {
@@ -24,13 +27,21 @@ export function registerClaimCommand(program: Command): void {
 					status?: ClaimStatus;
 					confidence?: number;
 					attrs?: Record<string, unknown>;
+					taskId?: string;
 				};
 				if (opts.jsonIn && opts.jsonIn !== "-") {
 					data = parseJsonFile<typeof data>(opts.jsonIn);
 				} else {
 					data = await parseJsonStdin<typeof data>();
 				}
+				if (opts.task) {
+					data.taskId = opts.task;
+				}
 				const claim = services.claim.addClaim(data);
+				markNodeWorkflow(services, claim, [
+					WORKFLOW_ITEMS.extractKnowledge,
+					WORKFLOW_ITEMS.writeGraph,
+				]);
 				writeJson(claim);
 			} catch (e) {
 				writeError((e as Error).message);

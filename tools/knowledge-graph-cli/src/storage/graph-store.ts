@@ -178,6 +178,11 @@ export class GraphStore {
 	// ── Node-Task Links ──
 
 	linkNodeToTask(nodeId: string, taskId: string, id: string): void {
+		const exists = this.data.nodeTaskLinks.some(
+			(link) => link.nodeId === nodeId && link.taskId === taskId,
+		);
+		if (exists) return;
+
 		this.data.nodeTaskLinks.push({
 			id,
 			nodeId,

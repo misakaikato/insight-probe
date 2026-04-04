@@ -6,10 +6,13 @@ import { QuestionService } from "../../../src/core/services/question-service";
 import { GapService } from "../../../src/core/services/gap-service";
 import { EvidenceService } from "../../../src/core/services/evidence-service";
 import { LlmTaskService } from "../../../src/core/services/llm-task-service";
+import { TaskChecklistService } from "../../../src/core/services/task-checklist-service";
 import type { LlmTaskEnvelope } from "../../../src/core/models/types";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { generateId } from "../../../src/utils/ids";
+import { now } from "../../../src/utils/time";
 
 function createTestStore(): {
 	store: GraphStore;
@@ -18,6 +21,7 @@ function createTestStore(): {
 	questionService: QuestionService;
 	gapService: GapService;
 	evidenceService: EvidenceService;
+	taskChecklistService: TaskChecklistService;
 	cleanup: () => void;
 } {
 	const dir = mkdtempSync(join(tmpdir(), "kg-test-"));
@@ -27,6 +31,7 @@ function createTestStore(): {
 	const claimService = new ClaimService(store, graphService);
 	const questionService = new QuestionService(store, graphService);
 	const gapService = new GapService(store, graphService);
+	const taskChecklistService = new TaskChecklistService(store);
 	return {
 		store,
 		graphService,
@@ -34,8 +39,37 @@ function createTestStore(): {
 		questionService,
 		gapService,
 		evidenceService,
+		taskChecklistService,
 		cleanup: () => rmSync(dir, { recursive: true }),
 	};
+}
+
+function createTask(context: ReturnType<typeof createTestStore>) {
+	const task = {
+		id: generateId("Task"),
+		title: "Test Task",
+		goal: "Test Goal",
+		status: "active" as const,
+		attrs: {},
+		createdAt: now(),
+		updatedAt: now(),
+	};
+	context.store.createTask(task);
+	context.store.save();
+	context.taskChecklistService.initializeTask(task.id);
+	return task;
+}
+
+function createService(context: ReturnType<typeof createTestStore>) {
+	return new LlmTaskService(
+		context.store,
+		context.graphService,
+		context.claimService,
+		context.questionService,
+		context.gapService,
+		context.evidenceService,
+		context.taskChecklistService,
+	);
 }
 
 let context: ReturnType<typeof createTestStore> | null = null;
@@ -62,16 +96,7 @@ function validateEnvelope(envelope: LlmTaskEnvelope, expectedTaskType: string) {
 describe("LlmTaskService", () => {
 	it("should build extract-entities task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
-		// buildExtractEntitiesTask takes (sourceId, taskId?) positional args
-		// It requires a valid Source node, so create one first
+		const service = createService(context);
 		const source = context.evidenceService.addSource({
 			title: "Test Source",
 			sourceType: "webpage",
@@ -83,14 +108,7 @@ describe("LlmTaskService", () => {
 
 	it("should build extract-claims task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
+		const service = createService(context);
 		const source = context.evidenceService.addSource({
 			title: "Test Source",
 			sourceType: "webpage",
@@ -101,14 +119,7 @@ describe("LlmTaskService", () => {
 
 	it("should build extract-observations task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
+		const service = createService(context);
 		const source = context.evidenceService.addSource({
 			title: "Test Source",
 			sourceType: "webpage",
@@ -119,87 +130,42 @@ describe("LlmTaskService", () => {
 
 	it("should build normalize-entities task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
-		// buildNormalizeEntitiesTask takes (taskId?) positional arg
+		const service = createService(context);
 		const envelope = service.buildNormalizeEntitiesTask();
 		validateEnvelope(envelope, "normalize_entities");
 	});
 
 	it("should build normalize-claims task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
+		const service = createService(context);
 		const envelope = service.buildNormalizeClaimsTask();
 		validateEnvelope(envelope, "normalize_claims");
 	});
 
 	it("should build generate-questions task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
+		const service = createService(context);
 		const envelope = service.buildGenerateQuestionsTask();
 		validateEnvelope(envelope, "generate_questions");
 	});
 
 	it("should build generate-hypotheses task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
+		const service = createService(context);
 		const envelope = service.buildGenerateHypothesesTask();
 		validateEnvelope(envelope, "generate_hypotheses");
 	});
 
 	it("should build next-search-queries task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
+		const service = createService(context);
 		const envelope = service.buildNextSearchQueriesTask();
 		validateEnvelope(envelope, "next_search_queries");
 	});
 
 	it("should build assess-evidence task envelope", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
-		// buildAssessEvidenceTask takes (claimId) positional arg
-		// It requires a valid Claim node
+		const service = createService(context);
 		const claim = context.claimService.addClaim({ text: "Test claim" });
 		const envelope = service.buildAssessEvidenceTask(claim.id);
 		validateEnvelope(envelope, "assess_evidence");
@@ -207,14 +173,7 @@ describe("LlmTaskService", () => {
 
 	it("should include executionHint when relevant", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
+		const service = createService(context);
 		const source = context.evidenceService.addSource({
 			title: "Test Source",
 			sourceType: "webpage",
@@ -227,20 +186,16 @@ describe("LlmTaskService", () => {
 
 	it("should include taskId when provided", () => {
 		context = createTestStore();
-		const service = new LlmTaskService(
-			context.store,
-			context.graphService,
-			context.claimService,
-			context.questionService,
-			context.gapService,
-			context.evidenceService,
-		);
+		const service = createService(context);
+		const task = createTask(context);
 		const source = context.evidenceService.addSource({
 			title: "Test Source",
 			sourceType: "webpage",
+			taskId: task.id,
 		});
-		// taskId is the second positional argument
-		const envelope = service.buildExtractEntitiesTask(source.id, "task_1");
-		expect(envelope.taskId).toBe("task_1");
+		const envelope = service.buildExtractEntitiesTask(source.id, task.id);
+		expect(envelope.taskId).toBe(task.id);
+		expect(envelope.inputContext.workflowChecklist).toBeDefined();
+		expect(envelope.recommendedPrompt).toContain("外置流程记忆");
 	});
 });

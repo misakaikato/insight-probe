@@ -1,10 +1,34 @@
 import type { Command } from "commander";
 import { getContext } from "../context";
+import type { BaseNode } from "../../core/models/types";
+import { markNodeWorkflow } from "../checklist";
+import { WORKFLOW_ITEMS } from "../../core/services/task-checklist-service";
 import { writeJson, parseJsonFile, parseJsonStdin } from "../../utils/json";
 
 function writeError(message: string): never {
 	console.error(JSON.stringify({ error: message }, null, 2));
 	process.exit(1);
+}
+
+function getWorkflowItemsForNode(node: BaseNode): string[] {
+	switch (node.kind) {
+		case "Source":
+			return node.text || node.summary ? [WORKFLOW_ITEMS.collectSources] : [];
+		case "Evidence":
+			return [WORKFLOW_ITEMS.writeGraph];
+		case "Claim":
+			return [WORKFLOW_ITEMS.extractKnowledge, WORKFLOW_ITEMS.writeGraph];
+		case "Question":
+		case "Hypothesis":
+		case "Gap":
+			return [WORKFLOW_ITEMS.synthesizeNextRound];
+		case "Entity":
+		case "Observation":
+		case "Value":
+			return [WORKFLOW_ITEMS.extractKnowledge];
+		default:
+			return [];
+	}
 }
 
 export function registerNodeCommand(program: Command): void {
@@ -48,7 +72,8 @@ export function registerNodeCommand(program: Command): void {
 		.command("upsert")
 		.description("Upsert a node from JSON input")
 		.option("--json-in <file>", "JSON file path (use - for stdin)")
-		.action(async (opts: { jsonIn?: string }) => {
+		.option("--task <taskId>", "Link the node to a task")
+		.action(async (opts: { jsonIn?: string; task?: string }) => {
 			try {
 				const { services } = getContext();
 				let data: Record<string, unknown>;
@@ -57,9 +82,16 @@ export function registerNodeCommand(program: Command): void {
 				} else {
 					data = await parseJsonStdin<Record<string, unknown>>();
 				}
+				if (opts.task) {
+					data.taskId = opts.task;
+				}
 				const node = services.graph.upsertNode(
 					data as Parameters<typeof services.graph.upsertNode>[0],
 				);
+				const workflowItems = getWorkflowItemsForNode(node);
+				if (workflowItems.length > 0) {
+					markNodeWorkflow(services, node, workflowItems);
+				}
 				writeJson(node);
 			} catch (e) {
 				writeError((e as Error).message);

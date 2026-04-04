@@ -16,6 +16,7 @@ export class QuestionService {
 		priority?: number;
 		status?: QuestionStatus;
 		attrs?: Record<string, unknown>;
+		taskId?: string | string[];
 	}): BaseNode {
 		if (data.status && !VALID_QUESTION_STATUSES.includes(data.status)) {
 			throw new Error(`Invalid question status: ${data.status}`);
@@ -29,6 +30,7 @@ export class QuestionService {
 				priority: data.priority,
 				...data.attrs,
 			},
+			taskId: data.taskId,
 		});
 	}
 

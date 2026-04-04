@@ -1,5 +1,7 @@
 import type { Command } from "commander";
 import { getContext } from "../context";
+import { markEdgeWorkflow } from "../checklist";
+import { WORKFLOW_ITEMS } from "../../core/services/task-checklist-service";
 import { writeJson } from "../../utils/json";
 
 function writeError(message: string): never {
@@ -28,6 +30,10 @@ export function registerEdgeCommand(program: Command): void {
 					directed: !opts.undirected,
 					confidence: opts.confidence,
 				});
+				markEdgeWorkflow(services, edge, [
+					WORKFLOW_ITEMS.extractKnowledge,
+					WORKFLOW_ITEMS.writeGraph,
+				]);
 				writeJson(edge);
 			} catch (e) {
 				writeError((e as Error).message);

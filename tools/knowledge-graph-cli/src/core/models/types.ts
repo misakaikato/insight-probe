@@ -95,6 +95,28 @@ export interface Task {
 	updatedAt: string;
 }
 
+export interface TaskChecklistItem {
+	id: string;
+	text: string;
+	completed: boolean;
+	section: string;
+}
+
+export interface TaskChecklist {
+	taskId: string;
+	taskDir: string;
+	tasksFile: string;
+	items: TaskChecklistItem[];
+	pendingItems: TaskChecklistItem[];
+	completedItems: TaskChecklistItem[];
+	summary: {
+		total: number;
+		completed: number;
+		pending: number;
+	};
+	markdown: string;
+}
+
 // ── Node-Task Link ──
 
 export interface NodeTaskLink {
@@ -140,6 +162,7 @@ export interface LlmTaskEnvelope {
 
 export interface PromptTemplateContext {
 	task: Task | null;
+	taskChecklist?: TaskChecklist | null;
 	source?: BaseNode;
 	focusNodes?: BaseNode[];
 	relatedClaims?: BaseNode[];

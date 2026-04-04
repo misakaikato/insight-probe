@@ -1,6 +1,8 @@
 import type { Command } from "commander";
 import type { QuestionStatus } from "../../core/models/types";
 import { getContext } from "../context";
+import { markNodeWorkflow } from "../checklist";
+import { WORKFLOW_ITEMS } from "../../core/services/task-checklist-service";
 import { writeJson, parseJsonFile, parseJsonStdin } from "../../utils/json";
 
 function writeError(message: string): never {
@@ -15,7 +17,8 @@ export function registerQuestionCommand(program: Command): void {
 		.command("add")
 		.description("Add a new question")
 		.option("--json-in <file>", "JSON file path (use - for stdin)")
-		.action(async (opts: { jsonIn?: string }) => {
+		.option("--task <taskId>", "Link the question to a task")
+		.action(async (opts: { jsonIn?: string; task?: string }) => {
 			try {
 				const { services } = getContext();
 				let data: {
@@ -24,13 +27,18 @@ export function registerQuestionCommand(program: Command): void {
 					priority?: number;
 					status?: QuestionStatus;
 					attrs?: Record<string, unknown>;
+					taskId?: string;
 				};
 				if (opts.jsonIn && opts.jsonIn !== "-") {
 					data = parseJsonFile<typeof data>(opts.jsonIn);
 				} else {
 					data = await parseJsonStdin<typeof data>();
 				}
+				if (opts.task) {
+					data.taskId = opts.task;
+				}
 				const question = services.question.addQuestion(data);
+				markNodeWorkflow(services, question, [WORKFLOW_ITEMS.synthesizeNextRound]);
 				writeJson(question);
 			} catch (e) {
 				writeError((e as Error).message);

@@ -16,6 +16,7 @@ export class ClaimService {
 		status?: ClaimStatus;
 		confidence?: number;
 		attrs?: Record<string, unknown>;
+		taskId?: string | string[];
 	}): BaseNode {
 		return this.graphService.upsertNode({
 			kind: "Claim",
@@ -26,6 +27,7 @@ export class ClaimService {
 				claimType: data.claimType,
 				...data.attrs,
 			},
+			taskId: data.taskId,
 		});
 	}
 

@@ -6,6 +6,7 @@ import type { GapService } from "../core/services/gap-service";
 import type { LlmTaskService } from "../core/services/llm-task-service";
 import type { ReportService } from "../core/services/report-service";
 import type { ResearchService } from "../core/services/research-service";
+import type { TaskChecklistService } from "../core/services/task-checklist-service";
 
 export interface Services {
 	graph: GraphService;
@@ -16,4 +17,5 @@ export interface Services {
 	llmTask: LlmTaskService;
 	report: ReportService;
 	research: ResearchService;
+	taskChecklist: TaskChecklistService;
 }

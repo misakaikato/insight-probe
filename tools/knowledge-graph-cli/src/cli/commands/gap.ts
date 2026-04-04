@@ -1,5 +1,7 @@
 import type { Command } from "commander";
 import { getContext } from "../context";
+import { markTaskWorkflow } from "../checklist";
+import { WORKFLOW_ITEMS } from "../../core/services/task-checklist-service";
 import { writeJson } from "../../utils/json";
 
 function writeError(message: string): never {
@@ -18,6 +20,7 @@ export function registerGapCommand(program: Command): void {
 			try {
 				const { services } = getContext();
 				const gaps = services.gap.detectGaps(opts.task);
+				markTaskWorkflow(services, opts.task, [WORKFLOW_ITEMS.synthesizeNextRound]);
 				writeJson(gaps);
 			} catch (e) {
 				writeError((e as Error).message);

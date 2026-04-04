@@ -15,6 +15,7 @@ const PREFIX_MAP: Record<string, string> = {
 	evidenceLink: "evl",
 	opLog: "op",
 	nodeTaskLink: "ntl",
+	taskItem: "tki",
 } as const;
 
 function shortId(bytes = 6): string {

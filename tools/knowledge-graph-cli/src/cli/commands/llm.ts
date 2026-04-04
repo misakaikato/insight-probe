@@ -167,4 +167,19 @@ export function registerLlmCommand(program: Command): void {
 				writeError((e as Error).message);
 			}
 		});
+
+	cmd
+		.command("generate-report")
+		.description("Build a rich report generation task from graph data")
+		.option("--task <taskId>", "Task ID context")
+		.option("--topic <topic>", "Research topic for the report")
+		.action((opts: { task?: string; topic?: string }) => {
+			try {
+				const { services } = getContext();
+				const envelope = services.llmTask.buildGenerateReportTask(opts.task, opts.topic);
+				writeJson(envelope);
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
 }
