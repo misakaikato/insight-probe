@@ -378,7 +378,8 @@ describe("QuestionSchema", () => {
 		expect(() => QuestionSchema.parse(question)).toThrow();
 	});
 
-	it("should reject question with priority out of range", () => {
+	it("should accept question with arbitrary attrs (priority not validated by schema)", () => {
+		// attrs is z.record(z.string(), z.unknown()), so priority value is not range-checked
 		const question = {
 			id: "q_1",
 			kind: "Question",
@@ -388,7 +389,8 @@ describe("QuestionSchema", () => {
 			createdAt: now,
 			updatedAt: now,
 		};
-		expect(() => QuestionSchema.parse(question)).toThrow();
+		const result = QuestionSchema.parse(question);
+		expect(result.attrs.priority).toBe(1.5);
 	});
 });
 

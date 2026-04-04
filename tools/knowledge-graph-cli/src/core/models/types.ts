@@ -144,6 +144,7 @@ export interface PromptTemplateContext {
 	focusNodes?: BaseNode[];
 	relatedClaims?: BaseNode[];
 	relatedEvidence?: BaseNode[];
+	relatedEdges?: Edge[];
 	openQuestions?: BaseNode[];
 	knownSchema?: {
 		entityTypes: string[];

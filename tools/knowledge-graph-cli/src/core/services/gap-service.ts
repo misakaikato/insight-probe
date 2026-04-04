@@ -9,9 +9,24 @@ export class GapService {
 		private graphService: GraphService,
 	) {}
 
+	/**
+	 * Build a unique key for an existing gap to detect duplicates.
+	 */
+	private buildGapKey(node: BaseNode): string {
+		return `${node.attrs?.gapType ?? "unknown"}:${node.attrs?.relatedNodeId ?? node.id}`;
+	}
+
+	/**
+	 * Detect gaps, avoiding duplicates based on gapType + relatedNodeId.
+	 */
 	detectGaps(taskId?: string): BaseNode[] {
 		const claims = this.graphService.listNodes({ kind: "Claim", taskId });
 		const questions = this.graphService.listNodes({ kind: "Question", taskId });
+
+		// Collect existing gap keys to avoid duplicates
+		const existingGaps = this.graphService.listNodes({ kind: "Gap", taskId });
+		const existingGapKeys = new Set(existingGaps.map((g) => this.buildGapKey(g)));
+
 		const gaps: BaseNode[] = [];
 
 		// Check claims without evidence
@@ -20,7 +35,8 @@ export class GapService {
 				(l) => l.targetId === claim.id && l.targetType === "node",
 			);
 
-			if (evidenceLinks.length === 0) {
+			const gapKey = `no_evidence:${claim.id}`;
+			if (evidenceLinks.length === 0 && !existingGapKeys.has(gapKey)) {
 				const gap = this.graphService.upsertNode({
 					kind: "Gap",
 					text: `断言 "${claim.text ?? claim.title ?? claim.id}" 无任何证据支持`,
@@ -33,6 +49,7 @@ export class GapService {
 					},
 				});
 				gaps.push(gap);
+				existingGapKeys.add(gapKey); // prevent duplicate within same run
 			} else {
 				// Check for insufficient evidence: only supports, no contradicts, single source
 				const supports = evidenceLinks.filter((l) => l.role === "supports");
@@ -46,7 +63,8 @@ export class GapService {
 					}
 				}
 
-				if (supports.length > 0 && contradicts.length === 0 && sourceIds.size <= 1) {
+				const insufficientKey = `insufficient_evidence:${claim.id}`;
+				if (supports.length > 0 && contradicts.length === 0 && sourceIds.size <= 1 && !existingGapKeys.has(insufficientKey)) {
 					const gap = this.graphService.upsertNode({
 						kind: "Gap",
 						text: `断言 "${claim.text ?? claim.title ?? claim.id}" 证据不充分：仅有 ${sourceIds.size} 个来源的支持证据，无反驳证据`,
@@ -60,6 +78,7 @@ export class GapService {
 						},
 					});
 					gaps.push(gap);
+					existingGapKeys.add(insufficientKey);
 				}
 			}
 		}
@@ -70,7 +89,8 @@ export class GapService {
 			const createdAt = new Date(question.createdAt);
 			const daysSinceCreation =
 				(Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-			if (daysSinceCreation > 3) {
+			const unresolvedKey = `unresolved_question:${question.id}`;
+			if (daysSinceCreation > 3 && !existingGapKeys.has(unresolvedKey)) {
 				const gap = this.graphService.upsertNode({
 					kind: "Gap",
 					text: `问题 "${question.text ?? question.title ?? question.id}" 已保持 open 状态 ${Math.floor(daysSinceCreation)} 天未解决`,
@@ -84,6 +104,7 @@ export class GapService {
 					},
 				});
 				gaps.push(gap);
+				existingGapKeys.add(unresolvedKey);
 			}
 		}
 

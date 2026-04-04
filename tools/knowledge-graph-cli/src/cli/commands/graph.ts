@@ -25,6 +25,24 @@ export function registerGraphCommand(program: Command): void {
 		});
 
 	cmd
+		.command("path <from> <to>")
+		.description("Find shortest path between two nodes")
+		.option("--max-depth <number>", "Maximum search depth", parseInt, 4)
+		.action((from: string, to: string, opts: { maxDepth: number }) => {
+			try {
+				const { services } = getContext();
+				const result = services.graph.findPath(from, to, opts.maxDepth);
+				if (!result) {
+					writeJson({ found: false, message: `未找到 ${from} 到 ${to} 的路径（最大深度 ${opts.maxDepth}）` });
+				} else {
+					writeJson({ found: true, ...result });
+				}
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
+
+	cmd
 		.command("subgraph")
 		.description("Get a subgraph with optional filters")
 		.option("--task <taskId>", "Filter by task ID")

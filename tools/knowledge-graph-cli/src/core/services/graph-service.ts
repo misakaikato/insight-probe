@@ -202,6 +202,68 @@ export class GraphService {
 		return { nodes: collectedNodes, edges: collectedEdges };
 	}
 
+	/**
+	 * Find shortest path between two nodes using BFS.
+	 */
+	findPath(fromId: string, toId: string, maxDepth: number = 4): { nodes: BaseNode[]; edges: Edge[] } | null {
+		const fromNode = this.store.getNode(fromId);
+		if (!fromNode) throw new Error(`源节点不存在: ${fromId}`);
+		const toNode = this.store.getNode(toId);
+		if (!toNode) throw new Error(`目标节点不存在: ${toId}`);
+		if (fromId === toId) return { nodes: [fromNode], edges: [] };
+
+		// BFS with parent tracking
+		const visited = new Set<string>([fromId]);
+		const parent = new Map<string, { nodeId: string; edgeId: string }>();
+
+		let frontier = new Set<string>([fromId]);
+
+		for (let d = 0; d < maxDepth; d++) {
+			const nextFrontier = new Set<string>();
+
+			for (const currentId of frontier) {
+				const edges = this.store.listEdges(
+					(e) => e.fromId === currentId || e.toId === currentId,
+				);
+
+				for (const edge of edges) {
+					const neighborId = edge.fromId === currentId ? edge.toId : edge.fromId;
+					if (visited.has(neighborId)) continue;
+
+					visited.add(neighborId);
+					parent.set(neighborId, { nodeId: currentId, edgeId: edge.id });
+					nextFrontier.add(neighborId);
+
+					if (neighborId === toId) {
+						// Reconstruct path
+						const pathEdges: Edge[] = [];
+						const pathNodeIds = new Set<string>([toId]);
+						let current: string | undefined = toId;
+
+						while (current && current !== fromId) {
+							const p = parent.get(current);
+							if (!p) break;
+							const edge = this.store.getEdge(p.edgeId);
+							if (edge) pathEdges.unshift(edge);
+							pathNodeIds.add(p.nodeId);
+							current = p.nodeId;
+						}
+
+						const pathNodes = [...pathNodeIds]
+							.map((id) => this.store.getNode(id))
+							.filter((n): n is BaseNode => n !== undefined);
+
+						return { nodes: pathNodes, edges: pathEdges };
+					}
+				}
+			}
+
+			frontier = nextFrontier;
+		}
+
+		return null; // No path found within maxDepth
+	}
+
 	getSubgraph(filters: {
 		taskId?: string;
 		focusId?: string;
@@ -283,7 +345,6 @@ export class GraphService {
 		}> = [];
 
 		const nodes = taskId ? this.listNodes({ taskId }) : this.store.listNodes();
-		const nodeIds = new Set(nodes.map((n) => n.id));
 
 		// Check for orphan nodes (no edges, not Task/Question/Gap kind — these are valid standalone)
 		const standaloneKinds = new Set(["Task", "Question", "Gap", "Hypothesis", "Source"]);

@@ -56,6 +56,21 @@ export function registerLlmCommand(program: Command): void {
 		});
 
 	cmd
+		.command("extract-relations")
+		.description("Build a relation extraction task for a source")
+		.requiredOption("--source <id>", "Source node ID")
+		.option("--task <taskId>", "Task ID context")
+		.action((opts: { source: string; task?: string }) => {
+			try {
+				const { services } = getContext();
+				const envelope = services.llmTask.buildExtractRelationsTask(opts.source, opts.task);
+				writeJson(envelope);
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
+
+	cmd
 		.command("normalize-entities")
 		.description("Build an entity normalization task")
 		.option("--task <taskId>", "Task ID context")
@@ -77,6 +92,20 @@ export function registerLlmCommand(program: Command): void {
 			try {
 				const { services } = getContext();
 				const envelope = services.llmTask.buildNormalizeClaimsTask(opts.task);
+				writeJson(envelope);
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
+
+	cmd
+		.command("normalize-predicates")
+		.description("Build a predicate normalization task")
+		.option("--task <taskId>", "Task ID context")
+		.action((opts: { task?: string }) => {
+			try {
+				const { services } = getContext();
+				const envelope = services.llmTask.buildNormalizePredicatesTask(opts.task);
 				writeJson(envelope);
 			} catch (e) {
 				writeError((e as Error).message);

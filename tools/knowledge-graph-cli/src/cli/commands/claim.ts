@@ -95,4 +95,17 @@ export function registerClaimCommand(program: Command): void {
 				writeError((e as Error).message);
 			}
 		});
+
+	cmd
+		.command("merge <id1> <id2>")
+		.description("Merge two claims (keeps id1, removes id2)")
+		.action((id1: string, id2: string) => {
+			try {
+				const { services } = getContext();
+				const merged = services.claim.mergeClaims(id1, id2);
+				writeJson(merged);
+			} catch (e) {
+				writeError((e as Error).message);
+			}
+		});
 }

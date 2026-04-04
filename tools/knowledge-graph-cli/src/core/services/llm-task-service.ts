@@ -22,6 +22,8 @@ import { buildPrompt as buildGenerateQuestionsPrompt, outputSchema as generateQu
 import { buildPrompt as buildGenerateHypothesesPrompt, outputSchema as generateHypothesesSchema } from "../../prompts/generate-hypotheses";
 import { buildPrompt as buildNextSearchQueriesPrompt, outputSchema as nextSearchQueriesSchema } from "../../prompts/next-search-queries";
 import { buildPrompt as buildAssessEvidencePrompt, outputSchema as assessEvidenceSchema } from "../../prompts/assess-evidence";
+import { buildPrompt as buildNormalizePredicatesPrompt, outputSchema as normalizePredicatesSchema } from "../../prompts/normalize-predicates";
+import { buildPrompt as buildExtractRelationsPrompt, outputSchema as extractRelationsSchema } from "../../prompts/extract-relations";
 
 export class LlmTaskService {
 	constructor(
@@ -59,6 +61,7 @@ export class LlmTaskService {
 		instructions: string,
 		recommendedPrompt: string,
 		outputSchema: Record<string, unknown>,
+		executionHint?: LlmTaskEnvelope["executionHint"],
 	): LlmTaskEnvelope {
 		return {
 			taskType,
@@ -68,6 +71,7 @@ export class LlmTaskService {
 			instructions,
 			recommendedPrompt,
 			outputSchema,
+			executionHint,
 		};
 	}
 
@@ -111,6 +115,9 @@ export class LlmTaskService {
 			`从来源 "${source.title ?? sourceId}" 中提取实体`,
 			buildExtractEntitiesPrompt(promptCtx),
 			extractEntitiesSchema(),
+			{
+				suggestedCommand: "kg node upsert --json-in - --dir <dir>",
+			},
 		);
 	}
 
@@ -146,6 +153,9 @@ export class LlmTaskService {
 			`从来源 "${source.title ?? sourceId}" 中提取观察`,
 			buildExtractObservationsPrompt(promptCtx),
 			extractObservationsSchema(),
+			{
+				suggestedCommand: "kg node upsert --json-in - --dir <dir>",
+			},
 		);
 	}
 
@@ -186,6 +196,9 @@ export class LlmTaskService {
 			`从来源 "${source.title ?? sourceId}" 中提取断言`,
 			buildExtractClaimsPrompt(promptCtx),
 			extractClaimsSchema(),
+			{
+				suggestedCommand: "kg claim add --json-in - --dir <dir>",
+			},
 		);
 	}
 
@@ -212,6 +225,9 @@ export class LlmTaskService {
 			"对知识图谱中的实体进行去重和规范化",
 			buildNormalizeEntitiesPrompt(promptCtx),
 			normalizeEntitiesSchema(),
+			{
+				suggestedCommand: "kg node upsert --json-in - --dir <dir>  (merge: kg node delete <duplicateId> --dir <dir>)",
+			},
 		);
 	}
 
@@ -238,6 +254,9 @@ export class LlmTaskService {
 			"对知识图谱中的断言进行去重和规范化",
 			buildNormalizeClaimsPrompt(promptCtx),
 			normalizeClaimsSchema(),
+			{
+				suggestedCommand: "kg claim merge <keptId> <removedId> --dir <dir>",
+			},
 		);
 	}
 
@@ -263,6 +282,9 @@ export class LlmTaskService {
 			"基于当前知识图谱生成新的研究问题",
 			buildGenerateQuestionsPrompt(promptCtx),
 			generateQuestionsSchema(),
+			{
+				suggestedCommand: "kg question add --json-in - --dir <dir>",
+			},
 		);
 	}
 
@@ -289,6 +311,9 @@ export class LlmTaskService {
 			"基于当前知识图谱生成假设",
 			buildGenerateHypothesesPrompt(promptCtx),
 			generateHypothesesSchema(),
+			{
+				suggestedCommand: "kg hypothesis add --json-in - --dir <dir>",
+			},
 		);
 	}
 
@@ -321,6 +346,9 @@ export class LlmTaskService {
 			"生成下一步搜索查询词以推进研究",
 			buildNextSearchQueriesPrompt(promptCtx),
 			nextSearchQueriesSchema(),
+			{
+				suggestedCommand: "opencli web search \"<query>\" --limit 8 -f json -o <dir>/search_results/r<n>_q<m>_opencli.json",
+			},
 		);
 	}
 
@@ -367,6 +395,88 @@ export class LlmTaskService {
 			`评估断言 "${claim.text ?? claim.title ?? claimId}" 的证据状况`,
 			buildAssessEvidencePrompt(promptCtx),
 			assessEvidenceSchema(),
+			{
+				suggestedCommand: "kg claim set-status <claimId> <status> --dir <dir>",
+			},
+		);
+	}
+
+	buildNormalizePredicatesTask(taskId?: string): LlmTaskEnvelope {
+		const ctx = this.buildBaseContext(taskId);
+		const edges = this.store.listEdges();
+		const predicates = [...new Set(edges.map((e) => e.type))];
+
+		const promptCtx: PromptTemplateContext = {
+			...ctx,
+			relatedEdges: edges,
+			knownSchema: {
+				entityTypes: [],
+				claimTypes: [],
+				predicates,
+			},
+		};
+
+		return this.buildEnvelope(
+			"normalize_predicates",
+			taskId,
+			{
+				relatedNodes: ctx.focusNodes,
+				relatedEdges: edges,
+				relatedEvidence: [],
+			},
+			{
+				predicateCount: predicates.length,
+				edgeCount: edges.length,
+			},
+			"对知识图谱中的谓词进行规范化映射",
+			buildNormalizePredicatesPrompt(promptCtx),
+			normalizePredicatesSchema(),
+			{
+				suggestedCommand: "kg edge delete <oldEdgeId> --dir <dir> && kg edge create --from <fromId> --type <normalizedPredicate> --to <toId> --dir <dir>",
+			},
+		);
+	}
+
+	buildExtractRelationsTask(sourceId: string, taskId?: string): LlmTaskEnvelope {
+		const source = this.store.getNode(sourceId);
+		if (!source) throw new Error(`来源节点不存在: ${sourceId}`);
+		if (source.kind !== "Source") throw new Error(`节点 ${sourceId} 不是 Source 类型`);
+
+		const ctx = this.buildBaseContext(taskId);
+		const existingEntities = ctx.focusNodes.filter((n) => n.kind === "Entity");
+		const predicates = [...new Set(this.store.listEdges().map((e) => e.type))];
+
+		const promptCtx: PromptTemplateContext = {
+			...ctx,
+			source,
+			focusNodes: existingEntities,
+			knownSchema: {
+				entityTypes: [...new Set(existingEntities.map((n) => n.type).filter(Boolean) as string[])],
+				claimTypes: [],
+				predicates,
+			},
+		};
+
+		return this.buildEnvelope(
+			"extract_relations",
+			taskId,
+			{
+				focusNodeIds: [sourceId],
+				relatedNodes: existingEntities,
+				relatedEdges: [],
+				relatedEvidence: [],
+			},
+			{
+				sourceId,
+				sourceTitle: source.title,
+				sourceContent: source.text ?? source.summary,
+			},
+			`从来源 "${source.title ?? sourceId}" 中提取关系`,
+			buildExtractRelationsPrompt(promptCtx),
+			extractRelationsSchema(),
+			{
+				suggestedCommand: "kg edge create --from <entityId1> --type <relation> --to <entityId2> --dir <dir>",
+			},
 		);
 	}
 }

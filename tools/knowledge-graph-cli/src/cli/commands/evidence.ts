@@ -80,10 +80,14 @@ export function registerEvidenceCommand(program: Command): void {
 		.command("list")
 		.description("List evidence for a target node or edge")
 		.requiredOption("--target <id>", "Target node or edge ID")
-		.action((opts: { target: string }) => {
+		.option("--role <role>", "Filter by link role (supports, contradicts, mentions, qualifies)")
+		.action((opts: { target: string; role?: string }) => {
 			try {
 				const { services } = getContext();
-				const result = services.evidence.listEvidenceByTarget(opts.target);
+				const result = services.evidence.listEvidenceByTarget(
+					opts.target,
+					opts.role as EvidenceLinkRole | undefined,
+				);
 				writeJson(result);
 			} catch (e) {
 				writeError((e as Error).message);

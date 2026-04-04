@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import type { QuestionStatus } from "../../core/models/types";
 import { getContext } from "../context";
 import { writeJson, parseJsonFile, parseJsonStdin } from "../../utils/json";
 
@@ -21,6 +22,7 @@ export function registerQuestionCommand(program: Command): void {
 					text: string;
 					questionType?: string;
 					priority?: number;
+					status?: QuestionStatus;
 					attrs?: Record<string, unknown>;
 				};
 				if (opts.jsonIn && opts.jsonIn !== "-") {

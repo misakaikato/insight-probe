@@ -1,4 +1,6 @@
 import type { BaseNode, QuestionStatus } from "../models/types";
+
+const VALID_QUESTION_STATUSES: QuestionStatus[] = ["open", "in_progress", "resolved", "blocked", "obsolete"];
 import type { GraphStore } from "../../storage/graph-store";
 import type { GraphService } from "./graph-service";
 
@@ -12,12 +14,16 @@ export class QuestionService {
 		text: string;
 		questionType?: string;
 		priority?: number;
+		status?: QuestionStatus;
 		attrs?: Record<string, unknown>;
 	}): BaseNode {
+		if (data.status && !VALID_QUESTION_STATUSES.includes(data.status)) {
+			throw new Error(`Invalid question status: ${data.status}`);
+		}
 		return this.graphService.upsertNode({
 			kind: "Question",
 			text: data.text,
-			status: "open",
+			status: data.status ?? "open",
 			attrs: {
 				questionType: data.questionType,
 				priority: data.priority,
@@ -41,6 +47,9 @@ export class QuestionService {
 	}
 
 	setQuestionStatus(id: string, status: QuestionStatus): BaseNode | undefined {
+		if (!VALID_QUESTION_STATUSES.includes(status)) {
+			throw new Error(`Invalid question status: ${status}`);
+		}
 		const question = this.store.getNode(id);
 		if (!question) return undefined;
 		if (question.kind !== "Question") {

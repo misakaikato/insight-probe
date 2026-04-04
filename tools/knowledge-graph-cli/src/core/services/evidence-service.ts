@@ -1,4 +1,4 @@
-import type { BaseNode, EvidenceLink, EvidenceLinkRole } from "../models/types";
+import type { BaseNode, EvidenceLink, EvidenceLinkRole, EvidenceLinkTargetType } from "../models/types";
 import type { GraphStore } from "../../storage/graph-store";
 import type { GraphService } from "./graph-service";
 import { generateId } from "../../utils/ids";
@@ -119,8 +119,10 @@ export class EvidenceService {
 		return link;
 	}
 
-	listEvidenceByTarget(targetId: string): { evidence: BaseNode[]; links: EvidenceLink[] } {
-		const links = this.store.listEvidenceLinks((l) => l.targetId === targetId);
+	listEvidenceByTarget(targetId: string, role?: EvidenceLinkRole): { evidence: BaseNode[]; links: EvidenceLink[] } {
+		const links = this.store.listEvidenceLinks(
+			(l) => l.targetId === targetId && (!role || l.role === role),
+		);
 		const evidence: BaseNode[] = [];
 		for (const link of links) {
 			const node = this.store.getNode(link.evidenceId);

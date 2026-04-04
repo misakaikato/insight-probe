@@ -44,6 +44,10 @@ export class ClaimService {
 	}
 
 	setClaimStatus(id: string, status: ClaimStatus): BaseNode | undefined {
+		const VALID_STATUSES: ClaimStatus[] = ["proposed","supported","weakly_supported","contested","contradicted","deprecated","superseded"];
+		if (!VALID_STATUSES.includes(status)) {
+			throw new Error(`Invalid claim status: ${status}`);
+		}
 		const claim = this.store.getNode(id);
 		if (!claim) return undefined;
 		if (claim.kind !== "Claim") {
