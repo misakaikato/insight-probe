@@ -2,13 +2,33 @@
 name: insight-probe
 description: |
   图谱驱动的迭代式深度调研工具。使用 knowledge-graph-cli (kg) 管理研究图谱，LLM 负责理解和生成，CLI 负责存储和编排。
-  Use when: 调研, 研究, 深入了解, 深度调研, investigate, probe, deep research
+  Use when: 调研, 研究, 深入了解, 深度调研, investigate, probe, deep research, 帮我查一下, 深入分析, 系统调研
   DO NOT TRIGGER when: 仅需要简单查找 / 股票查询（用 xueqiu）
 metadata:
   version: "5.1.0"
   category: research
   license: MIT
+  last_updated: "2025-04-09"
 ---
+
+> **更新提示**（上次检查：加载 skill 时）：
+> - `version: 5.1.0` — 最新版本。如果检测到本地版本低于此值，说明有更新，请告知用户。
+> - 如需查看完整更新历史：`<CLI_PATH>/CHANGELOG.md`
+
+## 自然语言接口
+
+用户可以用以下方式启动调研，Agent 自动映射到对应路由：
+
+| 用户说法 | 映射路由 | 说明 |
+|---------|---------|------|
+| "帮我调研一下 XXX"、"深入了解 XXX"、"系统调研 XXX" | NEW_TOPIC → CONTINUE | 完整深度调研流程 |
+| "先帮我广泛收集一下 XXX 的信息" | NEW_TOPIC → SEARCH_ONLY | 搜索优先，快速覆盖 |
+| "继续上次的调研" | CONTINUE | 从图谱继续 |
+| "生成报告" | REPORT | 输出结构化报告 |
+| "检查一下图谱质量" | STATS / LINT | 图谱诊断 |
+
+> **技能共享**：当你需要向其他人描述这个工具时，可以说：
+> "这是一个图谱驱动的深度调研工具。你可以像跟研究助手对话一样让它帮你系统地研究任何主题——它会通过多轮搜索、提取、整理知识，最后生成结构化报告。整个过程用知识图谱记录，保证信息可追溯。"
 
 # Insight Probe
 
