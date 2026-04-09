@@ -9,6 +9,7 @@ metadata:
   category: research
   license: MIT
   last_updated: "2025-04-09"
+  repository: "https://github.com/misakaikato/insight-probe"
 ---
 
 > **更新提示**（上次检查：加载 skill 时）：
@@ -26,6 +27,7 @@ metadata:
 | "继续上次的调研" | CONTINUE | 从图谱继续 |
 | "生成报告" | REPORT | 输出结构化报告 |
 | "检查一下图谱质量" | STATS / LINT | 图谱诊断 |
+| "更新一下这个 skill"、"更新 insight-probe" | UPDATE_SKILL | 从 GitHub 拉取最新版本 |
 
 > **技能共享**：当你需要向其他人描述这个工具时，可以说：
 > "这是一个图谱驱动的深度调研工具。你可以像跟研究助手对话一样让它帮你系统地研究任何主题——它会通过多轮搜索、提取、整理知识，最后生成结构化报告。整个过程用知识图谱记录，保证信息可追溯。"
@@ -49,6 +51,31 @@ metadata:
 | 生成报告 | REPORT | `kg llm generate-report --topic <主题> --dir <dir>` → LLM 生成结构化报告；`kg graph report` → 程序化快速检查 |
 
 > **SEARCH_ONLY vs CONTINUE**：SEARCH_ONLY 适合"先广泛收集信息"，搜索结果出来后立即提取（阈值较低），页面读取仅限高优先级。CONTINUE 适合"深度分析"，每个页面都深度提取，质量门槛更高。
+
+---
+
+## UPDATE_SKILL 路由：从 GitHub 更新
+
+```bash
+# 克隆仓库（首次）
+git clone https://github.com/misakaikato/insight-probe.git /tmp/insight-probe
+
+# 已有仓库则拉取最新
+cd <本地仓库路径>
+git pull origin main
+
+# 复制最新的 skill 文件到目标位置
+cp /tmp/insight-probe/SKILL.md ~/.hermes/skills/insight-probe/SKILL.md
+# 或目标路径为其他 skill 管理器配置的位置
+
+# 对比版本，确认更新内容
+git log --oneline <旧版本commit>..<新版本commit>
+```
+
+**更新检查流程**：
+1. 对比本地 `~/.hermes/skills/insight-probe/SKILL.md` 的 `version` 与 metadata 中的 `5.1.0`
+2. 若低于 `5.1.0` → 告知用户有可用更新，询问是否拉取
+3. 拉取后显示 changelog diff
 
 ---
 
