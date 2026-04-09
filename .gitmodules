@@ -1,3 +1,6 @@
 [submodule "tools/knowledge-graph-cli"]
 	path = tools/knowledge-graph-cli
 	url = git@github.com:fanghuzhaowen/agent-knowledge-graph-cli.git
+[submodule "tools/opencli"]
+	path = tools/opencli
+	url = git@github.com:misakaikato/opencli.git
