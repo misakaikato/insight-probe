@@ -1,81 +1,103 @@
 # Insight Probe
 
-图谱驱动的迭代式深度调研工具。使用 SearXNG + opencli 多站并发搜索，知识图谱作为唯一真相来源动态推导每轮搜索方向。
+图谱驱动的迭代式深度调研工具。使用知识图谱 CLI (`kg`) 作为唯一真相来源，LLM 负责理解和生成，CLI 负责存储和编排。
+
+## 数据模型
+
+- **4 种节点**：Entity（实体）、Source（来源）、Evidence（证据）、Proposition（命题）
+- **10 种边类型**：related_to, evidence_link, derived_from, contradicts, supports, supersedes, answers, raised_by, predicts, sourced_from
+- **命题生命周期**：12 种 status（unrefined → open → hypothesized → asserted → evaluating → supported/weakly_supported/contested/contradicted/superseded/resolved/obsolete）
+- **缺口检测**：纯计算返回 GapResult，不存储为节点
 
 ## Features
 
-- **知识图谱驱动**: 每一轮搜索方向由知识图谱中未回答的问题和新发现的实体决定
+- **知识图谱驱动**: 每一轮搜索方向由知识图谱中未回答的命题和新发现的实体决定
 - **多源并发搜索**: 同时使用 SearXNG 和 opencli 进行多站点搜索
 - **双语支持**: 中英文双语并发搜索，覆盖更多知识来源
 - **动态关系发现**: 自动从内容中提取实体间的关系
 - **知识版本追踪**: 保留知识更新历史，可追溯完整演变过程
+- **数据迁移**: 自动将旧版 kg.json（kind 字段）迁移为新版（type 字段）
 
 ## Usage
 
-### Commands
+### 安装
 
-| Command | Description |
-|---------|-------------|
-| `bun run kg new-topic "主题"` | 创建新调研目录和图谱 |
-| `bun run kg next <dir>` | 从图谱推导下一步搜索方向 |
-| `bun run research <dir>` | 执行数据采集（搜索+抓取） |
-| `bun run research <dir> --analyze` | 执行数据采集 + 自动分析 |
-| `bun run kg analyze <dir> [--max <n>]` | 分析页面并提取知识 |
-| `bun run kg stats <dir>` | 输出图谱统计摘要 |
-| `bun run kg mermaid <dir>` | 导出 Mermaid 可视化 |
-| `bun run kg image <dir>` | 导出 HTML 知识图谱图片 |
-| `bun run kg report <dir>` | 生成最终综合报告 |
-| `bun run kg knowledge-list <dir>` | 生成知识列表 |
-| `bun run kg clean <dir>` | 清理过期文件 |
-| `bun test` | 运行单元测试 |
+```bash
+cd tools/knowledge-graph-cli
+bun install
+bun run build
+bun link  # 可选，全局安装为 kg 命令
+```
+
+### 核心命令
+
+```bash
+# 创建新调研
+kg new-topic "主题"
+
+# 节点操作（4 种类型：Entity, Source, Evidence, Proposition）
+kg node upsert --json-in <file> --dir <dir>
+kg node list --kind Proposition --status open --dir <dir>
+kg node set-status <id> supported --dir <dir>
+kg node merge <id1> <id2> --dir <dir>
+
+# 证据链接（创建 evidence_link 类型的边）
+kg evidence add --json-in <file> --dir <dir>
+kg evidence link --evidence <id> --target <id> --role supports --dir <dir>
+
+# 图谱分析
+kg graph stats --dir <dir>
+kg graph lint --dir <dir>
+kg graph gaps --detect --dir <dir>
+
+# LLM 任务信封（不直接调用 LLM）
+kg llm extract-entities --source <id> --dir <dir>
+kg llm extract-claims --source <id> --dir <dir>
+kg llm generate-report --topic "主题" --dir <dir>
+```
 
 ### Route Table
 
 | 用户意图 | 路由 | 操作 |
 |----------|------|------|
 | 开始新调研 | NEW_TOPIC | 创建目录结构 + 初始化图谱 |
-| 继续调研 | CONTINUE | 读取图谱 → 推导下一步 → 执行搜索 |
-| 查看进度 | STATS | 输出图谱统计摘要 |
-| 导出可视化 | MERMAID | 生成 Mermaid 图 |
-| 导出图片 | IMAGE | 生成 HTML 知识图谱 |
-| 清理临时文件 | CLEAN | 删除过期文件 |
+| 继续调研 | CONTINUE | 推导搜索方向 → 搜索 → 抓取 → 提取 → 写回图谱 |
+| 查看进度 | STATS | `kg graph stats --dir <dir>` |
+| 检测缺口 | GAPS | `kg graph gaps --detect --dir <dir>` |
+| 生成报告 | REPORT | `kg llm generate-report` → LLM 生成 |
 
 ## Architecture
 
 ```
 temp/{topic}_{timestamp}/
-├── knowledge_graph.json    # 图谱（唯一的真相来源）
-├── search_results/         # 搜索原始结果
-├── pages/                  # 抓取页面全文
-└── reports/               # 最终报告
+├── kg.json              # 图谱（唯一的真相来源）
+├── search_results/      # 搜索原始结果
+├── pages/               # 抓取页面全文
+└── tasks/
+    └── {taskId}/
+        └── tasks.md     # 外置流程记忆 / checklist
 ```
 
 ## Output
 
-调研完成后生成以下文件：
-
 | File | Description |
 |------|-------------|
-| `final_report.md` | 最终综合报告 |
+| `final_report.md` | 最终综合报告（LLM 生成或程序化） |
 | `research_record.md` | 调研记录（按轮次） |
-| `knowledge_list.md` | 知识列表 |
-| `knowledge_graph.html` | 知识图谱可视化 |
-| `knowledge_graph.json` | 原始图谱数据 |
+| `kg.json` | 知识图谱原始数据 |
 
 ## Requirements
 
 - Bun
-- SearXNG (running at http://127.0.0.1:10086)
-- opencli
+- opencli（搜索 + 页面读取）
+- SearXNG（可选，运行于 http://127.0.0.1:10086）
 
-## Install
+## Testing
 
 ```bash
-# 安装依赖
-bun install
-
-# 运行测试
-bun test
+cd tools/knowledge-graph-cli
+bun run test        # 单元测试
+bun run test:e2e    # E2E 测试
 ```
 
 ## License
